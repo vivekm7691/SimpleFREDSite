@@ -48,7 +48,7 @@ async def fetch_fred_data(request: FREDFetchRequest):
 @router.post("/summarize", response_model=SummarizeResponse)
 async def summarize_data(request: SummarizeRequest):
     """
-    Summarize data using OpenAI (placeholder - to be implemented in Step 5).
+    Summarize data using Google Gemini (placeholder - to be implemented in Step 5).
     
     Args:
         request: SummarizeRequest with data to summarize
@@ -56,7 +56,7 @@ async def summarize_data(request: SummarizeRequest):
     Returns:
         SummarizeResponse with generated summary
     """
-    # TODO: Implement OpenAI integration in Step 5
+    # TODO: Implement Google Gemini integration in Step 5
     raise HTTPException(
         status_code=status.HTTP_501_NOT_IMPLEMENTED,
         detail="Summarization endpoint not yet implemented. Will be added in Step 5."

@@ -27,7 +27,7 @@ export async function fetchFREDData(seriesId) {
 }
 
 /**
- * Summarize data using OpenAI
+ * Summarize data using Google Gemini
  * @param {Object} data - The data to summarize
  * @returns {Promise<string>} The summary text
  */

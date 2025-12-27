@@ -1,11 +1,11 @@
 # Simple FRED Site
 
-A simple website that fetches economic data from the Federal Reserve Economic Data (FRED) API and provides AI-powered summaries using the OpenAI API.
+A simple website that fetches economic data from the Federal Reserve Economic Data (FRED) API and provides AI-powered summaries using the Google Gemini API.
 
 ## Project Overview
 
 This project consists of:
-- **Backend**: FastAPI service that integrates with FRED API and OpenAI API
+- **Backend**: FastAPI service that integrates with FRED API and Google Gemini API
 - **Frontend**: React application for user interaction
 - **Infrastructure**: Docker containerization for easy local development
 
@@ -20,7 +20,7 @@ This project consists of:
 
 - Docker Desktop installed and running
 - FRED API key ([Get one here](https://fred.stlouisfed.org/docs/api/api_key.html))
-- OpenAI API key ([Get one here](https://platform.openai.com/api-keys))
+- Google Gemini API key ([Get one here](https://ai.google.dev/))
 
 ## Quick Start
 
@@ -75,13 +75,13 @@ docker-compose run frontend npm test
 
 - `GET /health` - Health check endpoint
 - `POST /api/fred/fetch` - Fetch FRED data by series ID
-- `POST /api/summarize` - Generate summary using OpenAI
+- `POST /api/summarize` - Generate summary using Google Gemini
 
 ## Environment Variables
 
 See `.env.example` for required environment variables:
 - `FRED_API_KEY` - Your FRED API key
-- `OPENAI_API_KEY` - Your OpenAI API key
+- `GEMINI_API_KEY` - Your Google Gemini API key
 
 ## License
 
