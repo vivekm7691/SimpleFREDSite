@@ -4,6 +4,8 @@ FastAPI application entry point for Simple FRED Site backend.
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api import routes
+
 app = FastAPI(
     title="Simple FRED Site API",
     description="API for fetching FRED economic data and generating AI summaries",
@@ -18,6 +20,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include API routes
+app.include_router(routes.router)
 
 
 @app.get("/health")
