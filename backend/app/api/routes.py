@@ -11,6 +11,7 @@ from app.models.schemas import (
     SummarizeResponse
 )
 from app.services.fred_service import get_fred_service
+from app.services.gemini_service import get_gemini_service
 
 router = APIRouter(prefix="/api", tags=["api"])
 
@@ -48,17 +49,29 @@ async def fetch_fred_data(request: FREDFetchRequest):
 @router.post("/summarize", response_model=SummarizeResponse)
 async def summarize_data(request: SummarizeRequest):
     """
-    Summarize data using Google Gemini (placeholder - to be implemented in Step 5).
+    Summarize data using Google Gemini API.
     
     Args:
         request: SummarizeRequest with data to summarize
         
     Returns:
         SummarizeResponse with generated summary
+        
+    Raises:
+        HTTPException: If Gemini API request fails or summary cannot be generated
     """
-    # TODO: Implement Google Gemini integration in Step 5
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Summarization endpoint not yet implemented. Will be added in Step 5."
-    )
+    try:
+        gemini_service = get_gemini_service()
+        summary = await gemini_service.summarize_data(request.data)
+        return SummarizeResponse(summary=summary)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error generating summary: {str(e)}"
+        )
 

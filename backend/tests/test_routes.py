@@ -110,16 +110,64 @@ class TestFREDFetchEndpoint:
 class TestSummarizeEndpoint:
     """Test cases for the summarization endpoint."""
     
-    def test_summarize_not_implemented(self, client):
-        """Test that summarize endpoint returns 501 Not Implemented."""
-        response = client.post(
+    @pytest.mark.asyncio
+    async def test_summarize_success(self, async_client, mock_gemini_service):
+        """Test successful data summarization."""
+        # Setup mock response
+        mock_gemini_service.summarize_data = AsyncMock(
+            return_value="This is a test summary of the economic data."
+        )
+        
+        # Make request
+        response = await async_client.post(
+            "/api/summarize",
+            json={"data": {"series_info": {"title": "GDP"}, "observations": []}}
+        )
+        
+        # Assertions
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert "summary" in data
+        assert data["summary"] == "This is a test summary of the economic data."
+        mock_gemini_service.summarize_data.assert_called_once()
+    
+    @pytest.mark.asyncio
+    async def test_summarize_api_error(self, async_client, mock_gemini_service):
+        """Test summarization when Gemini API fails."""
+        # Setup mock to raise exception
+        mock_gemini_service.summarize_data = AsyncMock(
+            side_effect=Exception("Gemini API error")
+        )
+        
+        # Make request
+        response = await async_client.post(
             "/api/summarize",
             json={"data": {"test": "data"}}
         )
         
-        assert response.status_code == status.HTTP_501_NOT_IMPLEMENTED
+        # Assertions
+        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
         data = response.json()
-        assert "not yet implemented" in data["detail"].lower()
+        assert "error" in data["detail"].lower()
+    
+    @pytest.mark.asyncio
+    async def test_summarize_value_error(self, async_client, mock_gemini_service):
+        """Test summarization when ValueError is raised."""
+        # Setup mock to raise ValueError
+        mock_gemini_service.summarize_data = AsyncMock(
+            side_effect=ValueError("Invalid API key")
+        )
+        
+        # Make request
+        response = await async_client.post(
+            "/api/summarize",
+            json={"data": {"test": "data"}}
+        )
+        
+        # Assertions
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        data = response.json()
+        assert "Invalid API key" in data["detail"]
     
     def test_summarize_invalid_request(self, client):
         """Test summarize endpoint with invalid request."""

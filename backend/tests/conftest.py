@@ -9,6 +9,7 @@ from httpx import AsyncClient, ASGITransport
 
 from app.main import app
 from app.services.fred_service import FREDService
+from app.services.gemini_service import GeminiService
 
 
 @pytest.fixture
@@ -35,6 +36,19 @@ def mock_fred_service(monkeypatch):
         return mock_service
     
     monkeypatch.setattr("app.api.routes.get_fred_service", get_mock_service)
+    return mock_service
+
+
+@pytest.fixture
+def mock_gemini_service(monkeypatch):
+    """Create a mock Gemini service."""
+    mock_service = MagicMock(spec=GeminiService)
+    
+    # Mock the get_gemini_service function
+    def get_mock_service():
+        return mock_service
+    
+    monkeypatch.setattr("app.api.routes.get_gemini_service", get_mock_service)
     return mock_service
 
 
