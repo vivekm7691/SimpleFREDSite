@@ -43,12 +43,27 @@ def mock_fred_service(monkeypatch):
 def mock_gemini_service(monkeypatch):
     """Create a mock Gemini service."""
     mock_service = MagicMock(spec=GeminiService)
+    mock_service.summarize_data = AsyncMock(return_value="This is a test summary of the economic data.")
+    mock_service.model_name = "models/gemini-2.5-flash"
+    mock_service.api_key = "AIzaSyCfeYlom4MDQVu4TyY5ciXXYnhnP9_testkey"
     
-    # Mock the get_gemini_service function
-    def get_mock_service():
-        return mock_service
+    # Mock the GeminiService class constructor
+    # Since routes.py imports GeminiService inside the function, we need to mock it in the services module
+    class MockGeminiService:
+        def __init__(self, api_key=None, model_name="models/gemini-2.5-flash"):
+            # Store reference to mock_service for dynamic delegation
+            self._mock_service = mock_service
+            self.api_key = api_key or "AIzaSyCfeYlom4MDQVu4TyY5ciXXYnhnP9_testkey"
+            self.model_name = model_name
+            self.model = MagicMock()
+        
+        async def summarize_data(self, data):
+            # Delegate to mock_service dynamically so test updates work
+            return await self._mock_service.summarize_data(data)
     
-    monkeypatch.setattr("app.api.routes.get_gemini_service", get_mock_service)
+    # Replace GeminiService in the services module (where routes imports it from)
+    monkeypatch.setattr("app.services.gemini_service.GeminiService", MockGeminiService)
+    
     return mock_service
 
 

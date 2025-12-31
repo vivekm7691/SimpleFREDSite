@@ -111,8 +111,13 @@ class TestSummarizeEndpoint:
     """Test cases for the summarization endpoint."""
     
     @pytest.mark.asyncio
-    async def test_summarize_success(self, async_client, mock_gemini_service):
+    async def test_summarize_success(self, async_client, mock_gemini_service, monkeypatch):
         """Test successful data summarization."""
+        # Mock environment variables and file system for routes.py
+        test_key = "AIzaSyCfeYlom4MDQVu4TyY5ciXXYnhnP9_testkey"
+        monkeypatch.setenv("GEMINI_API_KEY", test_key)
+        monkeypatch.setattr("pathlib.Path.exists", lambda x: False)  # Prevent .env loading
+        
         # Setup mock response
         mock_gemini_service.summarize_data = AsyncMock(
             return_value="This is a test summary of the economic data."
@@ -132,8 +137,13 @@ class TestSummarizeEndpoint:
         mock_gemini_service.summarize_data.assert_called_once()
     
     @pytest.mark.asyncio
-    async def test_summarize_api_error(self, async_client, mock_gemini_service):
+    async def test_summarize_api_error(self, async_client, mock_gemini_service, monkeypatch):
         """Test summarization when Gemini API fails."""
+        # Mock environment variables and file system for routes.py
+        test_key = "AIzaSyCfeYlom4MDQVu4TyY5ciXXYnhnP9_testkey"
+        monkeypatch.setenv("GEMINI_API_KEY", test_key)
+        monkeypatch.setattr("pathlib.Path.exists", lambda x: False)  # Prevent .env loading
+        
         # Setup mock to raise exception
         mock_gemini_service.summarize_data = AsyncMock(
             side_effect=Exception("Gemini API error")
@@ -151,8 +161,13 @@ class TestSummarizeEndpoint:
         assert "error" in data["detail"].lower()
     
     @pytest.mark.asyncio
-    async def test_summarize_value_error(self, async_client, mock_gemini_service):
+    async def test_summarize_value_error(self, async_client, mock_gemini_service, monkeypatch):
         """Test summarization when ValueError is raised."""
+        # Mock environment variables and file system for routes.py
+        test_key = "AIzaSyCfeYlom4MDQVu4TyY5ciXXYnhnP9_testkey"
+        monkeypatch.setenv("GEMINI_API_KEY", test_key)
+        monkeypatch.setattr("pathlib.Path.exists", lambda x: False)  # Prevent .env loading
+        
         # Setup mock to raise ValueError
         mock_gemini_service.summarize_data = AsyncMock(
             side_effect=ValueError("Invalid API key")

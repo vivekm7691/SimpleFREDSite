@@ -18,13 +18,18 @@ class TestGeminiServiceInitialization:
             mock_genai.GenerativeModel.return_value = mock_model
             mock_genai.configure = MagicMock()
             
-            service = GeminiService(api_key="test_key_123")
-            assert service.api_key == "test_key_123"
-            mock_genai.configure.assert_called_once_with(api_key="test_key_123")
+            # Use a valid test API key format (starts with AIza)
+            test_key = "AIzaSyCfeYlom4MDQVu4TyY5ciXXYnhnP9_test123"
+            service = GeminiService(api_key=test_key)
+            assert service.api_key == test_key
+            mock_genai.configure.assert_called_once_with(api_key=test_key)
     
     def test_init_with_env_var(self, monkeypatch):
         """Test GeminiService initialization with environment variable."""
-        monkeypatch.setenv("GEMINI_API_KEY", "env_key_456")
+        # Use a valid test API key format
+        test_key = "AIzaSyCfeYlom4MDQVu4TyY5ciXXYnhnP9_env456"
+        monkeypatch.setenv("GEMINI_API_KEY", test_key)
+        monkeypatch.setattr("pathlib.Path.exists", lambda x: False)  # Prevent .env loading
         
         with patch('app.services.gemini_service.genai') as mock_genai:
             mock_model = MagicMock()
@@ -32,12 +37,13 @@ class TestGeminiServiceInitialization:
             mock_genai.configure = MagicMock()
             
             service = GeminiService()
-            assert service.api_key == "env_key_456"
-            mock_genai.configure.assert_called_once_with(api_key="env_key_456")
+            assert service.api_key == test_key
+            mock_genai.configure.assert_called_once_with(api_key=test_key)
     
     def test_init_without_api_key_raises_error(self, monkeypatch):
         """Test that GeminiService raises error when no API key is provided."""
         monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+        monkeypatch.setattr("pathlib.Path.exists", lambda x: False)  # Prevent .env loading
         
         with pytest.raises(ValueError, match="GEMINI_API_KEY"):
             GeminiService()
@@ -49,7 +55,8 @@ class TestGeminiServiceInitialization:
             mock_genai.GenerativeModel.return_value = mock_model
             mock_genai.configure = MagicMock()
             
-            service = GeminiService(api_key="test_key", model_name="gemini-ultra")
+            test_key = "AIzaSyCfeYlom4MDQVu4TyY5ciXXYnhnP9_testkey"
+            service = GeminiService(api_key=test_key, model_name="gemini-ultra")
             assert service.model_name == "gemini-ultra"
             mock_genai.GenerativeModel.assert_called_once_with("gemini-ultra")
 
@@ -68,7 +75,8 @@ class TestGeminiServiceSummarizeData:
             mock_genai.GenerativeModel.return_value = mock_model
             mock_genai.configure = MagicMock()
             
-            service = GeminiService(api_key="test_key")
+            test_key = "AIzaSyCfeYlom4MDQVu4TyY5ciXXYnhnP9_testkey"
+            service = GeminiService(api_key=test_key)
             
             fred_data = {
                 "series_info": {
@@ -104,7 +112,8 @@ class TestGeminiServiceSummarizeData:
             mock_genai.GenerativeModel.return_value = mock_model
             mock_genai.configure = MagicMock()
             
-            service = GeminiService(api_key="test_key")
+            test_key = "AIzaSyCfeYlom4MDQVu4TyY5ciXXYnhnP9_testkey"
+            service = GeminiService(api_key=test_key)
             
             generic_data = {"key": "value", "number": 123}
             
@@ -124,7 +133,8 @@ class TestGeminiServiceSummarizeData:
             mock_genai.GenerativeModel.return_value = mock_model
             mock_genai.configure = MagicMock()
             
-            service = GeminiService(api_key="test_key")
+            test_key = "AIzaSyCfeYlom4MDQVu4TyY5ciXXYnhnP9_testkey"
+            service = GeminiService(api_key=test_key)
             
             fred_data = {
                 "series_info": {
@@ -152,7 +162,8 @@ class TestGeminiServiceSummarizeData:
             mock_genai.GenerativeModel.return_value = mock_model
             mock_genai.configure = MagicMock()
             
-            service = GeminiService(api_key="test_key")
+            test_key = "AIzaSyCfeYlom4MDQVu4TyY5ciXXYnhnP9_testkey"
+            service = GeminiService(api_key=test_key)
             
             data = {"test": "data"}
             
@@ -170,7 +181,8 @@ class TestGeminiServiceSummarizeData:
             mock_genai.GenerativeModel.return_value = mock_model
             mock_genai.configure = MagicMock()
             
-            service = GeminiService(api_key="test_key")
+            test_key = "AIzaSyCfeYlom4MDQVu4TyY5ciXXYnhnP9_testkey"
+            service = GeminiService(api_key=test_key)
             
             data = {"test": "data"}
             
@@ -188,7 +200,8 @@ class TestGeminiServiceSummarizeData:
             mock_genai.GenerativeModel.return_value = mock_model
             mock_genai.configure = MagicMock()
             
-            service = GeminiService(api_key="test_key")
+            test_key = "AIzaSyCfeYlom4MDQVu4TyY5ciXXYnhnP9_testkey"
+            service = GeminiService(api_key=test_key)
             
             # Create data with more than 10 observations
             observations = [
@@ -221,7 +234,8 @@ class TestGeminiServicePromptCreation:
             mock_genai.GenerativeModel.return_value = mock_model
             mock_genai.configure = MagicMock()
             
-            service = GeminiService(api_key="test_key")
+            test_key = "AIzaSyCfeYlom4MDQVu4TyY5ciXXYnhnP9_testkey"
+            service = GeminiService(api_key=test_key)
             
             fred_data = {
                 "series_info": {
@@ -253,7 +267,8 @@ class TestGeminiServicePromptCreation:
             mock_genai.GenerativeModel.return_value = mock_model
             mock_genai.configure = MagicMock()
             
-            service = GeminiService(api_key="test_key")
+            test_key = "AIzaSyCfeYlom4MDQVu4TyY5ciXXYnhnP9_testkey"
+            service = GeminiService(api_key=test_key)
             
             generic_data = {"custom": "data", "value": 42}
             
@@ -272,8 +287,10 @@ class TestGetGeminiService:
         import app.services.gemini_service as gemini_service_module
         gemini_service_module._gemini_service = None
         
-        # Set up environment
-        monkeypatch.setenv("GEMINI_API_KEY", "test_key_123")
+        # Set up environment with valid test key
+        test_key = "AIzaSyCfeYlom4MDQVu4TyY5ciXXYnhnP9_test123"
+        monkeypatch.setenv("GEMINI_API_KEY", test_key)
+        monkeypatch.setattr("pathlib.Path.exists", lambda x: False)  # Prevent .env loading
         
         with patch('app.services.gemini_service.genai') as mock_genai:
             mock_model = MagicMock()
@@ -285,7 +302,8 @@ class TestGetGeminiService:
             
             assert service1 is service2
             assert isinstance(service1, GeminiService)
-            assert service1.api_key == "test_key_123"
+            assert service1.api_key == test_key
+
 
 
 
