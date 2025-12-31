@@ -46,6 +46,10 @@ export async function summarizeData(data) {
   }
 
   const result = await response.json()
+  // Handle both string and object responses
+  if (typeof result === 'string') {
+    return result
+  }
   return result.summary || result
 }
 

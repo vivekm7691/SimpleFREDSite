@@ -314,3 +314,5 @@ class TestGetFREDService:
         assert isinstance(service1, FREDService)
         assert service1.api_key == "test_key_123"
 
+
+

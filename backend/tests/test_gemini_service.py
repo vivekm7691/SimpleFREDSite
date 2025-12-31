@@ -287,3 +287,5 @@ class TestGetGeminiService:
             assert isinstance(service1, GeminiService)
             assert service1.api_key == "test_key_123"
 
+
+
