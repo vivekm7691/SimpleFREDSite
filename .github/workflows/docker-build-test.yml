@@ -1,0 +1,54 @@
+name: Build and Test Docker Image
+
+on:
+  workflow_dispatch:  # Allows manual triggering
+  push:
+    branches: [ main ]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/docker-build-test.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'backend/**'
+
+jobs:
+  build-backend:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          push: false
+          tags: fred-backend:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      
+      - name: Test Docker image
+        run: |
+          # Start container in background
+          docker run -d \
+            --name fred-backend-test \
+            -p 8000:8000 \
+            -e FRED_API_KEY=${{ secrets.FRED_API_KEY }} \
+            -e GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }} \
+            fred-backend:test
+          
+          # Wait for container to be ready
+          sleep 10
+          
+          # Test health endpoint
+          curl -f http://localhost:8000/health || exit 1
+          
+          # Cleanup
+          docker stop fred-backend-test
+          docker rm fred-backend-test
+
