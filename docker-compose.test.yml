@@ -1,0 +1,27 @@
+# Docker Compose override for running integration tests
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.test.yml up
+
+services:
+  integration-tests:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: fred-integration-tests
+    environment:
+      - BACKEND_URL=http://backend:8000
+      - FRONTEND_URL=http://frontend:80
+      - FRED_API_KEY=${FRED_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+    networks:
+      - fred-network
+    command: pytest /app/tests/ -v -m integration --tb=short
+    volumes:
+      - ./tests:/app/tests:ro
+      - ./backend/tests:/app/backend/tests:ro
+    working_dir: /app
+
