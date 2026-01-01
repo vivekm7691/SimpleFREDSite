@@ -1,14 +1,30 @@
+/**
+ * Main App component for Simple FRED Site.
+ * 
+ * Allows users to:
+ * - Enter a FRED series ID
+ * - Fetch economic data from FRED API
+ * - Generate AI-powered summaries using Google Gemini
+ */
 import { useState } from 'react'
 import './App.css'
 import { fetchFREDData, summarizeData } from './services/api'
 
 function App() {
+  // State management for form input, loading, errors, and data
   const [seriesId, setSeriesId] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [fredData, setFredData] = useState(null)
   const [summary, setSummary] = useState(null)
 
+  /**
+   * Handle form submission:
+   * 1. Validate series ID input
+   * 2. Fetch FRED data for the series ID
+   * 3. Generate AI summary of the fetched data
+   * 4. Handle errors appropriately
+   */
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!seriesId.trim()) {
