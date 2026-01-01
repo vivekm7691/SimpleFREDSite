@@ -1,7 +1,7 @@
 """
 FastAPI application entry point for Simple FRED Site backend.
 """
-import os
+
 import logging
 from pathlib import Path
 from dotenv import load_dotenv
@@ -13,14 +13,14 @@ from app.api import routes
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
 )
 logger = logging.getLogger(__name__)
 
 # Load environment variables from .env file
 # Look for .env in the project root (parent of backend directory)
-env_path = Path(__file__).parent.parent.parent / '.env'
+env_path = Path(__file__).parent.parent.parent / ".env"
 if env_path.exists():
     load_dotenv(env_path)
     logger.info(f"Loaded .env file from: {env_path}")
@@ -35,15 +35,17 @@ app = FastAPI(
     version="1.0.0",
 )
 
+
 # Add request logging middleware
 @app.middleware("http")
 async def log_requests(request, call_next):
     """Log all incoming requests."""
     import time
+
     start_time = time.time()
-    
+
     logger.info(f"Incoming request: {request.method} {request.url.path}")
-    
+
     try:
         response = await call_next(request)
         elapsed = time.time() - start_time
@@ -52,6 +54,7 @@ async def log_requests(request, call_next):
     except Exception as e:
         logger.error(f"Error in request: {str(e)}", exc_info=True)
         raise
+
 
 # Configure CORS
 app.add_middleware(
@@ -77,8 +80,5 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)
-
-
-
-
