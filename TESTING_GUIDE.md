@@ -229,14 +229,147 @@ npm test -- --testTimeout=10000
 
 ---
 
+## Integration Tests
+
+Integration tests verify that the backend and frontend work together correctly in a Docker Compose environment.
+
+### Prerequisites
+- Docker and Docker Compose installed
+- Environment variables set (`.env` file with `FRED_API_KEY` and `GEMINI_API_KEY`)
+- Services can be started with `docker-compose up`
+
+### Running Integration Tests
+
+**Option 1: Using Test Scripts (Recommended)**
+
+**Windows (PowerShell):**
+```powershell
+.\run_integration_tests.ps1
+```
+
+**Linux/Mac (Bash):**
+```bash
+chmod +x run_integration_tests.sh
+./run_integration_tests.sh
+```
+
+The script will:
+1. Start Docker Compose services
+2. Wait for services to be healthy
+3. Run integration tests
+4. Stop services after tests complete
+
+**Option 2: Manual Steps**
+
+1. **Start services:**
+   ```bash
+   docker-compose up -d
+   ```
+
+2. **Wait for services to be ready:**
+   ```bash
+   # Check backend health
+   curl http://localhost:8000/health
+   
+   # Check frontend
+   curl http://localhost:3000
+   ```
+
+3. **Run tests:**
+   ```bash
+   # From project root
+   cd backend
+   .\venv\Scripts\Activate.ps1  # Windows
+   # or: source venv/bin/activate  # Linux/Mac
+   cd ..
+   pytest tests/ -v -m integration
+   ```
+
+4. **Stop services:**
+   ```bash
+   docker-compose down
+   ```
+
+**Option 3: Using Docker Compose Test Service**
+
+```bash
+docker-compose -f docker-compose.yml -f docker-compose.test.yml run --rm integration-tests
+```
+
+### Running Specific Integration Tests
+
+```bash
+# Run all integration tests
+pytest tests/ -v -m integration
+
+# Run specific test file
+pytest tests/test_integration.py -v
+
+# Run specific test class
+pytest tests/test_integration.py::TestFullUserFlow -v
+
+# Run specific test function
+pytest tests/test_integration.py::TestFullUserFlow::test_fred_data_fetch_flow -v
+
+# Run with more verbose output
+pytest tests/ -v -m integration -s
+
+# Run and stop on first failure
+pytest tests/ -v -m integration -x
+```
+
+### Integration Test Structure
+- **Location**: `tests/`
+- **Test File**: `test_integration.py`
+- **Markers**: All tests are marked with `@pytest.mark.integration`
+- **Configuration**: `pytest.ini` (root level)
+
+### Integration Test Cases
+
+1. **Full User Flow**: Form submission → FRED fetch → Summary generation
+2. **Service Health Checks**: Backend and frontend accessibility
+3. **Error Handling**: Invalid series ID handling
+4. **Service Communication**: Network connectivity between services
+5. **API Response Format**: Verification of data structure for frontend
+6. **CORS Configuration**: Frontend-backend communication
+
+### Troubleshooting Integration Tests
+
+**Services Not Starting:**
+```bash
+# Check service logs
+docker-compose logs backend
+docker-compose logs frontend
+
+# Check service status
+docker-compose ps
+```
+
+**Tests Timing Out:**
+- Ensure services are healthy before running tests
+- Check that API keys are set in `.env` file
+- Verify network connectivity between services
+
+**API Key Issues:**
+- Ensure `.env` file exists with valid API keys
+- Check that environment variables are loaded: `docker-compose config`
+
+**Port Conflicts:**
+- If ports 8000 or 3000 are already in use, stop conflicting services or modify ports in `docker-compose.yml`
+
+For more detailed integration test documentation, see `tests/README.md`.
+
+---
+
 ## Quick Reference
 
-| Task | Backend | Frontend |
-|------|---------|----------|
-| Run all tests | `pytest` | `npm test` |
-| Run with coverage | `pytest` (default) | `npm test -- --coverage` |
-| Run specific file | `pytest tests/test_file.py` | `npm test -- file.test.jsx` |
-| Verbose output | `pytest -v` | `npm test -- --verbose` |
-| Watch mode | N/A | `npm test -- --watch` |
-| Stop on failure | `pytest -x` | `npm test -- --bail` |
+| Task | Backend | Frontend | Integration |
+|------|---------|----------|-------------|
+| Run all tests | `pytest` | `npm test` | `pytest tests/ -v -m integration` |
+| Run with coverage | `pytest` (default) | `npm test -- --coverage` | `pytest tests/ -v -m integration --cov` |
+| Run specific file | `pytest tests/test_file.py` | `npm test -- file.test.jsx` | `pytest tests/test_integration.py` |
+| Verbose output | `pytest -v` | `npm test -- --verbose` | `pytest tests/ -v -m integration` |
+| Watch mode | N/A | `npm test -- --watch` | N/A |
+| Stop on failure | `pytest -x` | `npm test -- --bail` | `pytest tests/ -v -m integration -x` |
+| Prerequisites | Python venv | Node.js | Docker Compose + .env |
 
