@@ -31,7 +31,13 @@ export async function fetchFREDData(seriesId) {
   })
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Failed to fetch FRED data' }))
+    let error
+    try {
+      error = await response.json()
+    } catch {
+      // If JSON parsing fails, use HTTP status message
+      error = {}
+    }
     throw new Error(error.detail || `HTTP error! status: ${response.status}`)
   }
 
@@ -53,7 +59,13 @@ export async function summarizeData(data) {
   })
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Failed to generate summary' }))
+    let error
+    try {
+      error = await response.json()
+    } catch {
+      // If JSON parsing fails, use HTTP status message
+      error = {}
+    }
     throw new Error(error.detail || `HTTP error! status: ${response.status}`)
   }
 
