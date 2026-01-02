@@ -28,12 +28,17 @@ FROM nginx:alpine
 COPY --from=builder /app/dist /usr/share/nginx/html
 
 # Add nginx configuration for SPA routing and API proxying
-# Note: API proxy will be configured via environment variable or docker-compose
+# Note: API proxy uses resolver with variable for lazy resolution
+# This allows nginx to start even if backend is not available (standalone mode)
+# For standalone use, frontend will call backend directly via API_BASE_URL
 RUN echo 'server { \
     listen 80; \
     server_name _; \
     root /usr/share/nginx/html; \
     index index.html; \
+    \
+    # Resolver for dynamic upstream resolution (Docker internal DNS) \
+    resolver 127.0.0.11 valid=10s; \
     \
     # Gzip compression \
     gzip on; \
@@ -47,9 +52,10 @@ RUN echo 'server { \
     } \
     \
     # API proxy - will be used when backend is in same Docker network \
-    # For standalone use, frontend will call backend directly via API_BASE_URL \
+    # Uses variable with resolver for lazy resolution (allows nginx to start without backend) \
     location /api { \
-        proxy_pass http://backend:8000; \
+        set $backend_upstream "http://backend:8000"; \
+        proxy_pass $backend_upstream; \
         proxy_http_version 1.1; \
         proxy_set_header Upgrade $http_upgrade; \
         proxy_set_header Connection "upgrade"; \
@@ -59,6 +65,9 @@ RUN echo 'server { \
         proxy_set_header X-Forwarded-Proto $scheme; \
         proxy_set_header X-Forwarded-Host $host; \
         proxy_set_header X-Forwarded-Port $server_port; \
+        proxy_connect_timeout 2s; \
+        proxy_send_timeout 2s; \
+        proxy_read_timeout 2s; \
     } \
     \
     # Cache static assets \
