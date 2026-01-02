@@ -1,5 +1,5 @@
 // Combined Jest transform that handles import.meta first, then passes to Babel
-const importMetaTransform = require('./jest-transform-import-meta')
+const importMetaTransform = require('./jest-transform-import-meta.cjs')
 
 // Get babel-jest transformer
 let babelJest

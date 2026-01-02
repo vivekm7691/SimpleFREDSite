@@ -8,7 +8,7 @@ module.exports = {
     '^(\\.{1,2}/.*)\\.js$': '$1',
   },
   transform: {
-    '^.+\\.(js|jsx)$': '<rootDir>/jest-transform-combined.js',
+    '^.+\\.(js|jsx)$': '<rootDir>/jest-transform-combined.cjs',
   },
   testMatch: [
     '<rootDir>/__tests__/**/*.test.{js,jsx}',
