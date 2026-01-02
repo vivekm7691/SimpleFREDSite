@@ -2,7 +2,19 @@
  * API client for communicating with the backend
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+// Get API base URL - works in both Vite and Jest environments
+// Vite exposes env vars via both import.meta.env and process.env
+// Jest can use process.env or global.import.meta (set up in jest.setup.js)
+let API_BASE_URL = 'http://localhost:8000'
+
+// Priority 1: Use global.import.meta (set up in jest.setup.js for tests)
+if (typeof global !== 'undefined' && global.import && global.import.meta && global.import.meta.env && global.import.meta.env.VITE_API_BASE_URL) {
+  API_BASE_URL = global.import.meta.env.VITE_API_BASE_URL
+} 
+// Priority 2: Use process.env (works in both Jest and Vite)
+else if (typeof process !== 'undefined' && process.env && process.env.VITE_API_BASE_URL) {
+  API_BASE_URL = process.env.VITE_API_BASE_URL
+}
 
 /**
  * Fetch FRED data by series ID
