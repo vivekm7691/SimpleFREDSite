@@ -146,6 +146,19 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       
+      - name: Verify Docker Compose
+        run: |
+          # Check if docker compose (plugin) is available
+          if docker compose version > /dev/null 2>&1; then
+            echo "Docker Compose plugin is available"
+            docker compose version
+          else
+            echo "Installing docker-compose..."
+            sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+            sudo chmod +x /usr/local/bin/docker-compose
+            docker-compose --version
+          fi
+      
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -161,7 +174,12 @@ jobs:
       
       - name: Start services with Docker Compose
         run: |
-          docker-compose up -d
+          # Use docker compose if available, otherwise use docker-compose
+          if docker compose version > /dev/null 2>&1; then
+            docker compose up -d
+          else
+            docker-compose up -d
+          fi
         env:
           FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -184,7 +202,11 @@ jobs:
           
           if [ $elapsed -ge $timeout ]; then
             echo "ERROR: Services did not become ready in time"
-            docker-compose logs
+            if docker compose version > /dev/null 2>&1; then
+              docker compose logs
+            else
+              docker-compose logs
+            fi
             exit 1
           fi
       
@@ -198,12 +220,20 @@ jobs:
       - name: Show service logs on failure
         if: failure()
         run: |
-          docker-compose logs
+          if docker compose version > /dev/null 2>&1; then
+            docker compose logs
+          else
+            docker-compose logs
+          fi
       
       - name: Stop services
         if: always()
         run: |
-          docker-compose down
+          if docker compose version > /dev/null 2>&1; then
+            docker compose down
+          else
+            docker-compose down
+          fi
 
   security-scan-backend:
     name: Backend Security Scan
