@@ -62,6 +62,36 @@ def http_client():
     return httpx.Client(timeout=TIMEOUT, follow_redirects=True)
 
 
+@pytest.fixture
+def api_keys_available():
+    """Check if API keys are available for tests that require them."""
+    # Check if we should skip API tests
+    skip_api_tests = os.getenv("SKIP_API_TESTS", "false").lower() == "true"
+    if skip_api_tests:
+        pytest.skip("API keys not available - skipping tests that require API access")
+    
+    # Try to make a health check to see if backend is configured
+    try:
+        response = httpx.get(f"{BACKEND_URL}/health", timeout=5.0)
+        if response.status_code == 200:
+            # Try a test request to see if API keys are configured
+            test_response = httpx.post(
+                f"{BACKEND_URL}/api/fred/fetch",
+                json={"series_id": "GDP"},
+                timeout=5.0
+            )
+            # If we get a 404 with "not found" it means API key is set but series doesn't exist
+            # If we get a 404 with "FRED_API_KEY" it means API key is missing
+            if test_response.status_code == 404:
+                error_detail = test_response.json().get("detail", "").lower()
+                if "fred_api_key" in error_detail or "environment variable is required" in error_detail:
+                    pytest.skip("API keys not configured - skipping tests that require API access")
+    except Exception:
+        pass  # If we can't check, assume keys are available and let the test fail naturally
+    
+    return True
+
+
 class TestFullUserFlow:
     """Integration tests for the complete user flow."""
     
@@ -83,7 +113,7 @@ class TestFullUserFlow:
         assert "html" in response.text.lower() or "root" in response.text.lower()
     
     @pytest.mark.integration
-    def test_fred_data_fetch_flow(self, backend_available, http_client):
+    def test_fred_data_fetch_flow(self, backend_available, http_client, api_keys_available):
         """
         Test the full flow: Fetch FRED data → Generate summary.
         This simulates the user flow: submit form → fetch data → display summary.
@@ -151,7 +181,7 @@ class TestFullUserFlow:
         )
     
     @pytest.mark.integration
-    def test_invalid_series_id_handling(self, backend_available, http_client):
+    def test_invalid_series_id_handling(self, backend_available, http_client, api_keys_available):
         """Test error handling for invalid series ID."""
         invalid_series_id = "INVALID_SERIES_12345"
         
@@ -195,7 +225,7 @@ class TestFullUserFlow:
         assert fetch_response.status_code in [200, 404]  # 200 if valid, 404 if not found
     
     @pytest.mark.integration
-    def test_end_to_end_flow_with_real_data(self, backend_available, http_client):
+    def test_end_to_end_flow_with_real_data(self, backend_available, http_client, api_keys_available):
         """
         Complete end-to-end test: Fetch data → Generate summary → Verify both responses.
         Uses a real FRED series to test the full integration.
@@ -266,7 +296,7 @@ class TestServiceCommunication:
             frontend_client.close()
     
     @pytest.mark.integration
-    def test_api_response_format(self, backend_available, http_client):
+    def test_api_response_format(self, backend_available, http_client, api_keys_available):
         """Test that API responses match expected format for frontend consumption."""
         response = http_client.post(
             f"{BACKEND_URL}/api/fred/fetch",
@@ -286,4 +316,7 @@ class TestServiceCommunication:
             assert isinstance(data["observations"], list)
             assert "observation_count" in data
             assert isinstance(data["observation_count"], int)
+
+
+
 

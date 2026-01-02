@@ -172,6 +172,17 @@ jobs:
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
       
+      - name: Check API keys
+        run: |
+          if [ -z "${{ secrets.FRED_API_KEY }}" ] || [ -z "${{ secrets.GEMINI_API_KEY }}" ]; then
+            echo "WARNING: FRED_API_KEY or GEMINI_API_KEY secrets are not set"
+            echo "Integration tests requiring API keys will be skipped"
+            echo "SKIP_API_TESTS=true" >> $GITHUB_ENV
+          else
+            echo "API keys are set"
+            echo "SKIP_API_TESTS=false" >> $GITHUB_ENV
+          fi
+      
       - name: Start services with Docker Compose
         run: |
           # Use docker compose if available, otherwise use docker-compose
@@ -216,6 +227,7 @@ jobs:
         env:
           BACKEND_URL: http://localhost:8000
           FRONTEND_URL: http://localhost:3000
+          SKIP_API_TESTS: ${{ env.SKIP_API_TESTS }}
       
       - name: Show service logs on failure
         if: failure()
