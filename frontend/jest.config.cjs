@@ -8,7 +8,12 @@ module.exports = {
     '^(\\.{1,2}/.*)\\.js$': '$1',
   },
   transform: {
-    '^.+\\.(js|jsx)$': '<rootDir>/jest-transform-combined.cjs',
+    '^.+\\.(js|jsx)$': ['babel-jest', { 
+      presets: [
+        ['@babel/preset-env', { modules: 'auto' }],
+        ['@babel/preset-react', { runtime: 'automatic' }]
+      ]
+    }],
   },
   testMatch: [
     '<rootDir>/__tests__/**/*.test.{js,jsx}',
