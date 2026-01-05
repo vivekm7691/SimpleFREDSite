@@ -190,3 +190,188 @@ class TestSummarizeEndpoint:
         response = client.post("/api/summarize", json={})
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
+
+class TestCategoryEndpoints:
+    """Test cases for category browsing endpoints."""
+
+    @pytest.mark.asyncio
+    async def test_get_categories_success(self, async_client, mock_category_service):
+        """Test successful retrieval of all categories."""
+        # Setup mock response
+        from app.models.schemas import CategoryInfo
+        mock_categories = [
+            CategoryInfo(
+                id="employment",
+                name="Employment",
+                icon="📊",
+                description="Labor market indicators",
+                series_count=12
+            ),
+            CategoryInfo(
+                id="inflation",
+                name="Inflation",
+                icon="📈",
+                description="Price level and inflation indicators",
+                series_count=10
+            ),
+        ]
+        mock_category_service.get_all_categories.return_value = mock_categories
+
+        # Make request
+        response = await async_client.get("/api/categories")
+
+        # Assertions
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert "categories" in data
+        assert len(data["categories"]) == 2
+        assert data["categories"][0]["id"] == "employment"
+        assert data["categories"][0]["name"] == "Employment"
+        assert data["categories"][0]["series_count"] == 12
+        mock_category_service.get_all_categories.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_get_categories_error(self, async_client, mock_category_service):
+        """Test categories endpoint when service raises an error."""
+        # Setup mock to raise exception
+        mock_category_service.get_all_categories.side_effect = Exception("Service error")
+
+        # Make request
+        response = await async_client.get("/api/categories")
+
+        # Assertions
+        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        data = response.json()
+        assert "error" in data["detail"].lower()
+
+    @pytest.mark.asyncio
+    async def test_get_category_series_success(self, async_client, mock_category_service, mock_fred_service):
+        """Test successful retrieval of series for a category."""
+        # Setup mock response
+        from app.models.schemas import CategorySeriesResponse, SeriesListItem
+        mock_response = CategorySeriesResponse(
+            category_id="employment",
+            category_name="Employment",
+            series=[
+                SeriesListItem(
+                    id="UNRATE",
+                    title="Unemployment Rate",
+                    frequency="Monthly",
+                    units="Percent",
+                    seasonal_adjustment="Seasonally Adjusted"
+                ),
+                SeriesListItem(
+                    id="PAYEMS",
+                    title="Nonfarm Payroll Employment",
+                    frequency="Monthly",
+                    units="Thousands of Persons",
+                    seasonal_adjustment="Seasonally Adjusted"
+                ),
+            ],
+            total_count=2
+        )
+        mock_category_service.get_category_series = AsyncMock(return_value=mock_response)
+
+        # Make request
+        response = await async_client.get("/api/categories/employment")
+
+        # Assertions
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["category_id"] == "employment"
+        assert data["category_name"] == "Employment"
+        assert len(data["series"]) == 2
+        assert data["series"][0]["id"] == "UNRATE"
+        assert data["series"][0]["title"] == "Unemployment Rate"
+        assert data["total_count"] == 2
+        mock_category_service.get_category_series.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_get_category_series_with_search(self, async_client, mock_category_service, mock_fred_service):
+        """Test category series endpoint with search query parameter."""
+        # Setup mock response
+        from app.models.schemas import CategorySeriesResponse, SeriesListItem
+        mock_response = CategorySeriesResponse(
+            category_id="employment",
+            category_name="Employment",
+            series=[
+                SeriesListItem(
+                    id="UNRATE",
+                    title="Unemployment Rate",
+                    frequency="Monthly",
+                    units="Percent",
+                    seasonal_adjustment="Seasonally Adjusted"
+                ),
+            ],
+            total_count=1
+        )
+        mock_category_service.get_category_series = AsyncMock(return_value=mock_response)
+
+        # Make request with search parameter
+        response = await async_client.get("/api/categories/employment?q=UN")
+
+        # Assertions
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert len(data["series"]) == 1
+        assert data["series"][0]["id"] == "UNRATE"
+        # Verify search term was passed
+        call_args = mock_category_service.get_category_series.call_args
+        assert call_args.kwargs["search_term"] == "UN"
+
+    @pytest.mark.asyncio
+    async def test_get_category_series_not_found(self, async_client, mock_category_service, mock_fred_service):
+        """Test category series endpoint when category is not found."""
+        # Setup mock to raise ValueError (category not found)
+        mock_category_service.get_category_series = AsyncMock(
+            side_effect=ValueError("Category 'invalid' not found")
+        )
+
+        # Make request
+        response = await async_client.get("/api/categories/invalid")
+
+        # Assertions
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+        data = response.json()
+        assert "not found" in data["detail"].lower()
+
+    @pytest.mark.asyncio
+    async def test_get_category_series_internal_error(self, async_client, mock_category_service, mock_fred_service):
+        """Test category series endpoint when internal error occurs."""
+        # Setup mock to raise generic exception
+        mock_category_service.get_category_series = AsyncMock(
+            side_effect=Exception("Internal server error")
+        )
+
+        # Make request
+        response = await async_client.get("/api/categories/employment")
+
+        # Assertions
+        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        data = response.json()
+        assert "error" in data["detail"].lower()
+
+    @pytest.mark.asyncio
+    async def test_get_category_series_empty_search(self, async_client, mock_category_service, mock_fred_service):
+        """Test category series endpoint with empty search term returns all series."""
+        # Setup mock response
+        from app.models.schemas import CategorySeriesResponse, SeriesListItem
+        mock_response = CategorySeriesResponse(
+            category_id="employment",
+            category_name="Employment",
+            series=[
+                SeriesListItem(id="UNRATE", title="UNRATE"),
+                SeriesListItem(id="PAYEMS", title="PAYEMS"),
+            ],
+            total_count=2
+        )
+        mock_category_service.get_category_series = AsyncMock(return_value=mock_response)
+
+        # Make request with empty search parameter
+        response = await async_client.get("/api/categories/employment?q=")
+
+        # Assertions
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert len(data["series"]) == 2
+

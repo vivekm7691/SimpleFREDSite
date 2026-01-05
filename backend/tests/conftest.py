@@ -10,6 +10,8 @@ from httpx import AsyncClient, ASGITransport
 from app.main import app
 from app.services.fred_service import FREDService
 from app.services.gemini_service import GeminiService
+from app.services.category_service import CategoryService
+from app.services.category_service import CategoryService
 
 
 @pytest.fixture
@@ -64,6 +66,19 @@ def mock_gemini_service(monkeypatch):
     # Replace GeminiService in the services module (where routes imports it from)
     monkeypatch.setattr("app.services.gemini_service.GeminiService", MockGeminiService)
     
+    return mock_service
+
+
+@pytest.fixture
+def mock_category_service(monkeypatch):
+    """Create a mock Category service."""
+    mock_service = MagicMock(spec=CategoryService)
+    
+    # Mock the get_category_service function
+    def get_mock_service():
+        return mock_service
+    
+    monkeypatch.setattr("app.api.routes.get_category_service", get_mock_service)
     return mock_service
 
 
