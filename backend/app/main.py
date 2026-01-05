@@ -31,7 +31,7 @@ else:
 
 app = FastAPI(
     title="Simple FRED Site API",
-    description="API for fetching FRED economic data and generating AI summaries",
+    description="API for fetching FRED economic data, browsing by categories, and generating AI summaries",
     version="1.0.0",
 )
 
