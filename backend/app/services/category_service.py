@@ -22,6 +22,10 @@ CATEGORIES = {
             "ICSA",  # Initial Claims
             "UNEMPLOY",  # Number of Unemployed Persons
             "LNS12032194",  # Employment Level - 25-54 Yrs.
+            "LNS12300060",  # Employment Level - 16-19 Yrs.
+            "LNS14000006",  # Unemployment Rate - Black or African American
+            "LNS14000009",  # Unemployment Rate - Hispanic or Latino
+            "LNS11300060",  # Labor Force Participation Rate - 25-54 Yrs.
         ],
     },
     "inflation": {
@@ -30,12 +34,15 @@ CATEGORIES = {
         "icon": "📈",
         "description": "Price level and inflation indicators",
         "series_ids": [
-            "CPIAUCSL",  # Consumer Price Index for All Urban Consumers
-            "CPILFESL",  # Consumer Price Index for All Urban Consumers: All Items Less Food & Energy
+            "CPIAUCSL",  # Consumer Price Index for All Urban Consumers: All Items in U.S. City Average
+            "CPILFESL",  # Consumer Price Index for All Urban Consumers: All Items Less Food & Energy in U.S. City Average
             "PCEPI",  # Personal Consumption Expenditures: Chain-type Price Index
             "PCEPILFE",  # Personal Consumption Expenditures Excluding Food and Energy
-            "CPIAUCSL",  # Consumer Price Index
+            "CPALTT01USM661N",  # Consumer Price Index: Total All Items for the United States
             "USACPIALLMINMEI",  # Consumer Price Index: All Items for the United States
+            "CPIHOSNS",  # Consumer Price Index for All Urban Consumers: Housing in U.S. City Average
+            "CUSR0000SETB01",  # Consumer Price Index for All Urban Consumers: Gasoline (All Types) in U.S. City Average
+            "CUSR0000SA0L2",  # Consumer Price Index for All Urban Consumers: Medical Care Services in U.S. City Average
         ],
     },
     "gdp": {
@@ -48,9 +55,14 @@ CATEGORIES = {
             "GDPC1",  # Real Gross Domestic Product
             "GDPPOT",  # Real Potential GDP
             "GDPDEF",  # Gross Domestic Product: Implicit Price Deflator
-            "A191RL1Q225SBEA",  # Real Gross Domestic Product
+            "A191RL1Q225SBEA",  # Real Gross Domestic Product: Percent Change from Preceding Period
             "PCECC96",  # Real Personal Consumption Expenditures
             "GPDIC1",  # Real Gross Private Domestic Investment
+            "GCEC1",  # Real Government Consumption Expenditures and Gross Investment
+            "NETEXP",  # Net Exports of Goods and Services
+            "GDPNOW",  # Real Gross Domestic Product (GDPNow)
+            "GDPC1CTM",  # Real Gross Domestic Product: Chained Dollars
+            "GDPC1_PCH",  # Real Gross Domestic Product: Percent Change from Preceding Period
         ],
     },
     "interest_rates": {
@@ -66,6 +78,11 @@ CATEGORIES = {
             "DGS2",  # 2-Year Treasury Constant Maturity Rate
             "DFF",  # Federal Funds Effective Rate
             "TB3MS",  # 3-Month Treasury Bill: Secondary Market Rate
+            "DGS1",  # 1-Year Treasury Constant Maturity Rate
+            "DGS20",  # 20-Year Treasury Constant Maturity Rate
+            "DAAA",  # Moody's Seasoned Aaa Corporate Bond Yield
+            "DBAA",  # Moody's Seasoned Baa Corporate Bond Yield
+            "DPRIME",  # Bank Prime Loan Rate
         ],
     },
     "money_banking": {
@@ -80,6 +97,12 @@ CATEGORIES = {
             "BOGMBASE",  # Monetary Base
             "BOGNONBR",  # Non-Borrowed Reserves of Depository Institutions
             "WALCL",  # Assets: Total Assets: Total Assets (Less Eliminations from Consolidation)
+            "M1V",  # Velocity of M1 Money Stock
+            "M2V",  # Velocity of M2 Money Stock
+            "BORROW",  # Borrowings of Depository Institutions from the Federal Reserve
+            "EXCSRESNS",  # Excess Reserves of Depository Institutions
+            "TOTLL",  # Total Loans and Leases at Commercial Banks
+            "TOTCI",  # Total Credit to Private Non-Financial Sector
         ],
     },
     "production": {
@@ -94,6 +117,12 @@ CATEGORIES = {
             "IPB50003N",  # Industrial Production: Business Equipment
             "IPB50004N",  # Industrial Production: Materials
             "IPB50005N",  # Industrial Production: Final Products
+            "IPMAN",  # Industrial Production: Manufacturing (NAICS)
+            "IPCONGD",  # Industrial Production: Consumer Goods
+            "IPBUSEQ",  # Industrial Production: Business Equipment
+            "IPMAT",  # Industrial Production: Materials
+            "TCU",  # Capacity Utilization: Total Industry
+            "UMCSENT",  # University of Michigan: Consumer Sentiment
         ],
     },
     "prices": {
@@ -104,9 +133,16 @@ CATEGORIES = {
         "series_ids": [
             "PPIACO",  # Producer Price Index for All Commodities
             "WPSFD49207",  # Producer Price Index by Commodity: Processed Foods and Feeds
-            "WPSID61",  # Producer Price Index by Commodity: Intermediate Materials
-            "WPSID62",  # Producer Price Index by Commodity: Crude Materials
+            "WPSID61",  # Producer Price Index by Commodity: Intermediate Materials: Supplies & Components
+            "WPSID62",  # Producer Price Index by Commodity: Crude Materials for Further Processing
             "PPIFIS",  # Producer Price Index by Industry: Finance and Insurance
+            "WPSFD49502",  # Producer Price Index by Commodity: Finished Goods
+            "PPIIDC",  # Producer Price Index by Commodity: Industrial Commodities
+            "PPIITM",  # Producer Price Index by Commodity: Intermediate Materials: Supplies & Components
+            "PPIFCG",  # Producer Price Index by Commodity: Finished Consumer Goods
+            "PPIENG",  # Producer Price Index by Commodity: Fuels and Related Products and Power
+            "WPSID62",  # Producer Price Index by Commodity: Crude Materials
+            "WPSID61",  # Producer Price Index by Commodity: Intermediate Materials
         ],
     },
 }
