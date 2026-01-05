@@ -231,20 +231,33 @@ class CategoryService:
             series_ids = self.get_category_series_ids(category_id)
 
         # If FRED service is provided, fetch metadata for each series
-        # For now, we'll return basic info - metadata fetching will be handled
-        # by extending FREDService in the next step
-        series_list = []
-        for series_id in series_ids:
-            # Basic series info - full metadata will come from FREDService
-            series_list.append(
+        if fred_service:
+            try:
+                series_list = await fred_service.get_series_list(series_ids)
+            except Exception:
+                # If fetching fails, fall back to basic info
+                series_list = [
+                    SeriesListItem(
+                        id=series_id,
+                        title=series_id,
+                        frequency=None,
+                        units=None,
+                        seasonal_adjustment=None,
+                    )
+                    for series_id in series_ids
+                ]
+        else:
+            # Return basic info if no FRED service provided
+            series_list = [
                 SeriesListItem(
                     id=series_id,
-                    title=series_id,  # Placeholder - will be replaced with actual title
+                    title=series_id,
                     frequency=None,
                     units=None,
                     seasonal_adjustment=None,
                 )
-            )
+                for series_id in series_ids
+            ]
 
         return CategorySeriesResponse(
             category_id=category["id"],
