@@ -7,7 +7,7 @@
  * - Fetch economic data from FRED API
  * - Generate AI-powered summaries using Google Gemini
  */
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import './App.css'
 import { fetchFREDData, summarizeData } from './services/api'
 import CategoryBrowser from './components/CategoryBrowser'
@@ -26,6 +26,22 @@ function App() {
   const [selectedCategoryId, setSelectedCategoryId] = useState(null)
   const [categoryView, setCategoryView] = useState('grid') // 'grid' | 'detail'
   const [categoryBrowserKey, setCategoryBrowserKey] = useState(0) // Key to reset CategoryBrowser component
+
+  // Ref for scrolling to data section
+  const dataSectionRef = useRef(null)
+
+  /**
+   * Scroll to the data section smoothly when data is fetched.
+   * This provides better UX by automatically showing the fetched data.
+   */
+  const scrollToData = () => {
+    if (dataSectionRef.current) {
+      dataSectionRef.current.scrollIntoView({ 
+        behavior: 'smooth', 
+        block: 'start' 
+      })
+    }
+  }
 
   /**
    * Handle form submission:
@@ -50,6 +66,11 @@ function App() {
       // Fetch FRED data
       const data = await fetchFREDData(seriesId.trim().toUpperCase())
       setFredData(data)
+
+      // Scroll to data section after DOM updates
+      setTimeout(() => {
+        scrollToData()
+      }, 100)
 
       // Generate summary using the fetched data
       const summaryData = await summarizeData(data)
@@ -147,7 +168,7 @@ function App() {
         />
 
         {fredData && (
-          <div className="data-section">
+          <div className="data-section" ref={dataSectionRef}>
             <h2>FRED Economic Data</h2>
             {fredData.series_info && (
               <div className="series-info">
