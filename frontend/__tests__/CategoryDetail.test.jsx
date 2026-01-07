@@ -215,11 +215,17 @@ describe('CategoryDetail Component', () => {
 
   it('should display search empty state when search returns no results', async () => {
     const user = userEvent.setup()
-    fetchCategorySeries.mockResolvedValueOnce(mockSeriesResponse)
-    fetchCategorySeries.mockResolvedValueOnce({
-      category_name: 'Employment',
-      total_count: 0,
-      series: [],
+    
+    // Use mockImplementation to handle calls based on search term
+    fetchCategorySeries.mockImplementation((categoryId, searchTerm) => {
+      if (searchTerm === 'nonexistent') {
+        return Promise.resolve({
+          category_name: 'Employment',
+          total_count: 0,
+          series: [],
+        })
+      }
+      return Promise.resolve(mockSeriesResponse)
     })
 
     render(
@@ -230,25 +236,36 @@ describe('CategoryDetail Component', () => {
       />
     )
 
+    // Wait for initial load
     await waitFor(() => {
       expect(screen.getByText('Employment')).toBeInTheDocument()
+      expect(screen.getByText('Unemployment Rate')).toBeInTheDocument()
     })
 
     const searchInput = screen.getByPlaceholderText('Search in category...')
+    await user.clear(searchInput)
     await user.type(searchInput, 'nonexistent')
 
+    // Wait for search API call to complete and UI to update
     await waitFor(() => {
+      expect(screen.queryByText('Unemployment Rate')).not.toBeInTheDocument()
       expect(screen.getByText(/No series found matching "nonexistent"/)).toBeInTheDocument()
-    })
+    }, { timeout: 3000 })
   })
 
   it('should display search results count when search is active', async () => {
     const user = userEvent.setup()
-    fetchCategorySeries.mockResolvedValueOnce(mockSeriesResponse)
-    fetchCategorySeries.mockResolvedValueOnce({
-      category_name: 'Employment',
-      total_count: 10,
-      series: [mockSeriesResponse.series[0]], // Only one result
+    
+    // Use mockImplementation to handle calls based on search term
+    fetchCategorySeries.mockImplementation((categoryId, searchTerm) => {
+      if (searchTerm === 'unemployment') {
+        return Promise.resolve({
+          category_name: 'Employment',
+          total_count: 10,
+          series: [mockSeriesResponse.series[0]], // Only one result
+        })
+      }
+      return Promise.resolve(mockSeriesResponse)
     })
 
     render(
@@ -259,16 +276,22 @@ describe('CategoryDetail Component', () => {
       />
     )
 
+    // Wait for initial load
     await waitFor(() => {
       expect(screen.getByText('Employment')).toBeInTheDocument()
+      expect(screen.getByText('Unemployment Rate')).toBeInTheDocument()
     })
 
     const searchInput = screen.getByPlaceholderText('Search in category...')
+    await user.clear(searchInput)
     await user.type(searchInput, 'unemployment')
 
+    // Wait for search API call to complete and UI to update
     await waitFor(() => {
+      expect(screen.getByText('Unemployment Rate')).toBeInTheDocument()
+      expect(screen.queryByText('Total Nonfarm Payrolls')).not.toBeInTheDocument()
       expect(screen.getByText(/Showing 1 of 10 series/)).toBeInTheDocument()
-    })
+    }, { timeout: 3000 })
   })
 
   it('should not fetch when categoryId is not provided', () => {
