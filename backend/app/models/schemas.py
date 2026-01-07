@@ -91,7 +91,9 @@ class SeriesListItem(BaseModel):
 class CategoryResponse(BaseModel):
     """Response model for list of categories."""
 
-    categories: List[CategoryInfo] = Field(..., description="List of available categories")
+    categories: List[CategoryInfo] = Field(
+        ..., description="List of available categories"
+    )
 
 
 class CategorySeriesResponse(BaseModel):

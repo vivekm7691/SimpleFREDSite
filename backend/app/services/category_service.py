@@ -313,4 +313,3 @@ def get_category_service() -> CategoryService:
     if _category_service is None:
         _category_service = CategoryService()
     return _category_service
-
