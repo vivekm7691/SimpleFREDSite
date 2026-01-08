@@ -61,3 +61,45 @@ class SummarizeResponse(BaseModel):
     """Response model for summarization."""
 
     summary: str = Field(..., description="Generated summary")
+
+
+# Category browsing models
+
+
+class CategoryInfo(BaseModel):
+    """Model for individual category information."""
+
+    id: str = Field(..., description="Category ID (e.g., 'employment', 'inflation')")
+    name: str = Field(..., description="Category display name")
+    icon: str = Field(..., description="Category icon (emoji or icon identifier)")
+    description: Optional[str] = Field(None, description="Category description")
+    series_count: int = Field(..., description="Number of series in this category")
+
+
+class SeriesListItem(BaseModel):
+    """Simplified series model for category listings."""
+
+    id: str = Field(..., description="Series ID")
+    title: str = Field(..., description="Series title")
+    frequency: Optional[str] = Field(None, description="Data frequency")
+    units: Optional[str] = Field(None, description="Units of measurement")
+    seasonal_adjustment: Optional[str] = Field(
+        None, description="Seasonal adjustment method"
+    )
+
+
+class CategoryResponse(BaseModel):
+    """Response model for list of categories."""
+
+    categories: List[CategoryInfo] = Field(
+        ..., description="List of available categories"
+    )
+
+
+class CategorySeriesResponse(BaseModel):
+    """Response model for series within a category."""
+
+    category_id: str = Field(..., description="Category ID")
+    category_name: str = Field(..., description="Category name")
+    series: List[SeriesListItem] = Field(..., description="List of series in category")
+    total_count: int = Field(..., description="Total number of series in category")

@@ -15,6 +15,8 @@ jest.mock('../src/services/api', () => ({
 describe('App Component', () => {
   beforeEach(() => {
     jest.clearAllMocks()
+    // Mock scrollIntoView for jsdom (not fully implemented)
+    Element.prototype.scrollIntoView = jest.fn()
   })
 
   it('should render the app with header and form', () => {

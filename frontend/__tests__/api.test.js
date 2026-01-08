@@ -1,7 +1,13 @@
 /**
  * Tests for API client functions
  */
-import { fetchFREDData, summarizeData } from '../src/services/api'
+import {
+  fetchFREDData,
+  summarizeData,
+  fetchCategories,
+  fetchCategorySeries,
+  searchCategorySeries,
+} from '../src/services/api'
 
 // Mock fetch globally
 global.fetch = jest.fn()
@@ -168,5 +174,301 @@ describe('API Client', () => {
       await expect(summarizeData({})).rejects.toThrow('Network error')
     })
   })
+
+  describe('fetchCategories', () => {
+    it('should fetch categories successfully', async () => {
+      const mockCategories = {
+        categories: [
+          {
+            id: 'employment',
+            name: 'Employment',
+            icon: '📊',
+            description: 'Labor market indicators',
+            series_count: 12,
+          },
+          {
+            id: 'inflation',
+            name: 'Inflation',
+            icon: '📈',
+            description: 'Price level indicators',
+            series_count: 10,
+          },
+        ],
+      }
+
+      fetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockCategories,
+      })
+
+      const result = await fetchCategories()
+
+      expect(fetch).toHaveBeenCalledWith('http://localhost:8000/api/categories', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+      expect(result).toEqual(mockCategories)
+      expect(result.categories).toHaveLength(2)
+      expect(result.categories[0].id).toBe('employment')
+    })
+
+    it('should handle API errors with error message', async () => {
+      const errorResponse = {
+        detail: 'Failed to fetch categories',
+      }
+
+      fetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        json: async () => errorResponse,
+      })
+
+      await expect(fetchCategories()).rejects.toThrow('Failed to fetch categories')
+    })
+
+    it('should handle HTTP errors without JSON response', async () => {
+      fetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        json: async () => {
+          throw new Error('Invalid JSON')
+        },
+      })
+
+      await expect(fetchCategories()).rejects.toThrow('HTTP error! status: 500')
+    })
+
+    it('should handle network errors', async () => {
+      fetch.mockRejectedValueOnce(new Error('Network error'))
+
+      await expect(fetchCategories()).rejects.toThrow('Network error')
+    })
+  })
+
+  describe('fetchCategorySeries', () => {
+    it('should fetch category series successfully', async () => {
+      const mockSeries = {
+        category_id: 'employment',
+        category_name: 'Employment',
+        series: [
+          {
+            id: 'UNRATE',
+            title: 'Unemployment Rate',
+            frequency: 'Monthly',
+            units: 'Percent',
+            seasonal_adjustment: 'Seasonally Adjusted',
+          },
+          {
+            id: 'PAYEMS',
+            title: 'Nonfarm Payroll Employment',
+            frequency: 'Monthly',
+            units: 'Thousands of Persons',
+            seasonal_adjustment: 'Seasonally Adjusted',
+          },
+        ],
+        total_count: 2,
+      }
+
+      fetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockSeries,
+      })
+
+      const result = await fetchCategorySeries('employment')
+
+      expect(fetch).toHaveBeenCalledWith(
+        'http://localhost:8000/api/categories/employment',
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      )
+      expect(result).toEqual(mockSeries)
+      expect(result.series).toHaveLength(2)
+      expect(result.category_id).toBe('employment')
+    })
+
+    it('should fetch category series with search term', async () => {
+      const mockSeries = {
+        category_id: 'employment',
+        category_name: 'Employment',
+        series: [
+          {
+            id: 'UNRATE',
+            title: 'Unemployment Rate',
+            frequency: 'Monthly',
+            units: 'Percent',
+            seasonal_adjustment: 'Seasonally Adjusted',
+          },
+        ],
+        total_count: 1,
+      }
+
+      fetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockSeries,
+      })
+
+      const result = await fetchCategorySeries('employment', 'UN')
+
+      expect(fetch).toHaveBeenCalledWith(
+        'http://localhost:8000/api/categories/employment?q=UN',
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      )
+      expect(result).toEqual(mockSeries)
+      expect(result.series).toHaveLength(1)
+    })
+
+    it('should URL encode category ID correctly', async () => {
+      const mockSeries = {
+        category_id: 'interest_rates',
+        category_name: 'Interest Rates',
+        series: [],
+        total_count: 0,
+      }
+
+      fetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockSeries,
+      })
+
+      await fetchCategorySeries('interest_rates')
+
+      expect(fetch).toHaveBeenCalledWith(
+        'http://localhost:8000/api/categories/interest_rates',
+        expect.any(Object)
+      )
+    })
+
+    it('should handle API errors with error message', async () => {
+      const errorResponse = {
+        detail: "Category 'invalid' not found",
+      }
+
+      fetch.mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        json: async () => errorResponse,
+      })
+
+      await expect(fetchCategorySeries('invalid')).rejects.toThrow(
+        "Category 'invalid' not found"
+      )
+    })
+
+    it('should handle HTTP errors without JSON response', async () => {
+      fetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        json: async () => {
+          throw new Error('Invalid JSON')
+        },
+      })
+
+      await expect(fetchCategorySeries('employment')).rejects.toThrow(
+        'HTTP error! status: 500'
+      )
+    })
+
+    it('should handle network errors', async () => {
+      fetch.mockRejectedValueOnce(new Error('Network error'))
+
+      await expect(fetchCategorySeries('employment')).rejects.toThrow('Network error')
+    })
+  })
+
+  describe('searchCategorySeries', () => {
+    it('should search category series successfully', async () => {
+      const mockSeries = {
+        category_id: 'employment',
+        category_name: 'Employment',
+        series: [
+          {
+            id: 'UNRATE',
+            title: 'Unemployment Rate',
+            frequency: 'Monthly',
+            units: 'Percent',
+            seasonal_adjustment: 'Seasonally Adjusted',
+          },
+        ],
+        total_count: 1,
+      }
+
+      fetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockSeries,
+      })
+
+      const result = await searchCategorySeries('employment', 'UN')
+
+      expect(fetch).toHaveBeenCalledWith(
+        'http://localhost:8000/api/categories/employment?q=UN',
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      )
+      expect(result).toEqual(mockSeries)
+      expect(result.series).toHaveLength(1)
+    })
+
+    it('should handle empty search term', async () => {
+      const mockSeries = {
+        category_id: 'employment',
+        category_name: 'Employment',
+        series: [],
+        total_count: 0,
+      }
+
+      fetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockSeries,
+      })
+
+      const result = await searchCategorySeries('employment', '')
+
+      // Empty search should still make request (backend handles empty search)
+      expect(fetch).toHaveBeenCalled()
+      expect(result).toEqual(mockSeries)
+    })
+
+    it('should handle API errors', async () => {
+      const errorResponse = {
+        detail: 'Search failed',
+      }
+
+      fetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        json: async () => errorResponse,
+      })
+
+      await expect(searchCategorySeries('employment', 'test')).rejects.toThrow(
+        'Search failed'
+      )
+    })
+
+    it('should handle network errors', async () => {
+      fetch.mockRejectedValueOnce(new Error('Network error'))
+
+      await expect(searchCategorySeries('employment', 'test')).rejects.toThrow(
+        'Network error'
+      )
+    })
+  })
 })
+
+
+
 

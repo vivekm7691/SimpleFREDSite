@@ -77,3 +77,74 @@ export async function summarizeData(data) {
   return result.summary || result
 }
 
+/**
+ * Fetch all available categories with series counts
+ * @returns {Promise<Object>} CategoryResponse with list of categories
+ */
+export async function fetchCategories() {
+  const response = await fetch(`${API_BASE_URL}/api/categories`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  })
+
+  if (!response.ok) {
+    let error
+    try {
+      error = await response.json()
+    } catch {
+      // If JSON parsing fails, use HTTP status message
+      error = {}
+    }
+    throw new Error(error.detail || `HTTP error! status: ${response.status}`)
+  }
+
+  return await response.json()
+}
+
+/**
+ * Fetch series list for a specific category
+ * @param {string} categoryId - The category identifier (e.g., 'employment', 'inflation')
+ * @param {string} [searchTerm] - Optional search term to filter series within the category
+ * @returns {Promise<Object>} CategorySeriesResponse with series list
+ */
+export async function fetchCategorySeries(categoryId, searchTerm = null) {
+  // Build URL with optional search query parameter
+  let url = `${API_BASE_URL}/api/categories/${encodeURIComponent(categoryId)}`
+  if (searchTerm) {
+    const params = new URLSearchParams({ q: searchTerm })
+    url += `?${params.toString()}`
+  }
+
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  })
+
+  if (!response.ok) {
+    let error
+    try {
+      error = await response.json()
+    } catch {
+      // If JSON parsing fails, use HTTP status message
+      error = {}
+    }
+    throw new Error(error.detail || `HTTP error! status: ${response.status}`)
+  }
+
+  return await response.json()
+}
+
+/**
+ * Search for series within a category
+ * @param {string} categoryId - The category identifier
+ * @param {string} searchTerm - Search term to filter series
+ * @returns {Promise<Object>} CategorySeriesResponse with filtered series list
+ */
+export async function searchCategorySeries(categoryId, searchTerm) {
+  return fetchCategorySeries(categoryId, searchTerm)
+}
+

@@ -3,15 +3,19 @@ API routes for FRED data and summarization.
 """
 
 import logging
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Query
+from typing import Optional
 
 from app.models.schemas import (
     FREDFetchRequest,
     FREDDataResponse,
     SummarizeRequest,
     SummarizeResponse,
+    CategoryResponse,
+    CategorySeriesResponse,
 )
 from app.services.fred_service import get_fred_service
+from app.services.category_service import get_category_service
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -122,4 +126,69 @@ async def summarize_data(request: SummarizeRequest):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error generating summary: {str(e)}",
+        )
+
+
+@router.get("/categories", response_model=CategoryResponse)
+async def get_categories():
+    """
+    Get all available categories with series counts.
+
+    Returns:
+        CategoryResponse with list of all categories
+
+    Raises:
+        HTTPException: If categories cannot be retrieved
+    """
+    try:
+        category_service = get_category_service()
+        categories = category_service.get_all_categories()
+        return CategoryResponse(categories=categories)
+    except Exception as e:
+        logger.error(f"Error fetching categories: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error fetching categories: {str(e)}",
+        )
+
+
+@router.get("/categories/{category_id}", response_model=CategorySeriesResponse)
+async def get_category_series(
+    category_id: str,
+    q: Optional[str] = Query(None, description="Search term to filter series"),
+):
+    """
+    Get series list for a specific category, optionally filtered by search term.
+
+    Args:
+        category_id: Category identifier (e.g., 'employment', 'inflation')
+        q: Optional search term to filter series within the category
+
+    Returns:
+        CategorySeriesResponse with series list for the category
+
+    Raises:
+        HTTPException: If category not found or series cannot be retrieved
+    """
+    try:
+        category_service = get_category_service()
+        fred_service = get_fred_service()
+
+        # Get series for category with optional search filter
+        response = await category_service.get_category_series(
+            category_id=category_id,
+            search_term=q,
+            fred_service=fred_service,
+        )
+        return response
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        logger.error(
+            f"Error fetching series for category '{category_id}': {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error fetching category series: {str(e)}",
         )

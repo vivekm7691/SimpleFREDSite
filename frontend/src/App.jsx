@@ -3,12 +3,14 @@
  * 
  * Allows users to:
  * - Enter a FRED series ID
+ * - Browse FRED series by category
  * - Fetch economic data from FRED API
  * - Generate AI-powered summaries using Google Gemini
  */
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import './App.css'
 import { fetchFREDData, summarizeData } from './services/api'
+import CategoryBrowser from './components/CategoryBrowser'
 
 function App() {
   // State management for form input, loading, errors, and data
@@ -17,6 +19,29 @@ function App() {
   const [error, setError] = useState(null)
   const [fredData, setFredData] = useState(null)
   const [summary, setSummary] = useState(null)
+
+  // State management for category browser
+  // These track the current state of category browsing for potential future use
+  // (e.g., URL params, analytics, persistence)
+  const [selectedCategoryId, setSelectedCategoryId] = useState(null)
+  const [categoryView, setCategoryView] = useState('grid') // 'grid' | 'detail'
+  const [categoryBrowserKey, setCategoryBrowserKey] = useState(0) // Key to reset CategoryBrowser component
+
+  // Ref for scrolling to data section
+  const dataSectionRef = useRef(null)
+
+  /**
+   * Scroll to the data section smoothly when data is fetched.
+   * This provides better UX by automatically showing the fetched data.
+   */
+  const scrollToData = () => {
+    if (dataSectionRef.current) {
+      dataSectionRef.current.scrollIntoView({ 
+        behavior: 'smooth', 
+        block: 'start' 
+      })
+    }
+  }
 
   /**
    * Handle form submission:
@@ -42,9 +67,18 @@ function App() {
       const data = await fetchFREDData(seriesId.trim().toUpperCase())
       setFredData(data)
 
+      // Scroll to data section after DOM updates
+      setTimeout(() => {
+        scrollToData()
+      }, 100)
+
       // Generate summary using the fetched data
       const summaryData = await summarizeData(data)
       setSummary(summaryData)
+
+      // Reset category browser after successful data fetch
+      // This provides a clean state when user selects a new series
+      resetCategoryBrowser()
     } catch (err) {
       setError(err.message || 'An error occurred while fetching data')
       setFredData(null)
@@ -53,6 +87,41 @@ function App() {
       setLoading(false)
     }
   }
+
+  /**
+   * Reset category browser to initial state (grid view, no selected category).
+   * This is called after successful data fetch to provide a clean state.
+   */
+  const resetCategoryBrowser = () => {
+    setSelectedCategoryId(null)
+    setCategoryView('grid')
+    // Force CategoryBrowser to reset by changing its key
+    // This causes React to unmount and remount the component, resetting all internal state
+    setCategoryBrowserKey((prev) => prev + 1)
+  }
+
+  /**
+   * Handle series selection from CategoryBrowser.
+   * Auto-fills the input field with the selected series ID.
+   * @param {string} selectedSeriesId - Selected series ID
+   */
+  const handleSeriesSelect = (selectedSeriesId) => {
+    setSeriesId(selectedSeriesId)
+    // Optionally, you could auto-trigger fetch here:
+    // handleSubmit({ preventDefault: () => {} })
+  }
+
+  /**
+   * Track category browser state changes for potential future use
+   * (e.g., URL params, analytics, browser history)
+   * Note: CategoryBrowser manages its own internal state, but we track
+   * the high-level state here for App-level coordination.
+   */
+  useEffect(() => {
+    // Future: Could sync selectedCategoryId and categoryView with URL params
+    // Future: Could track analytics events for category navigation
+    // For now, state is tracked but CategoryBrowser is self-contained
+  }, [selectedCategoryId, categoryView])
 
   return (
     <div className="App">
@@ -92,8 +161,14 @@ function App() {
           </div>
         )}
 
+        {/* Category Browser Section */}
+        <CategoryBrowser
+          key={categoryBrowserKey}
+          onSeriesSelect={handleSeriesSelect}
+        />
+
         {fredData && (
-          <div className="data-section">
+          <div className="data-section" ref={dataSectionRef}>
             <h2>FRED Economic Data</h2>
             {fredData.series_info && (
               <div className="series-info">
