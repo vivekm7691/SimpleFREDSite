@@ -33,7 +33,9 @@ function CategoryBrowser({ onSeriesSelect }) {
       try {
         const response = await fetchCategories()
         setCategories(response.categories || [])
+        setError(null) // Clear any previous errors
       } catch (err) {
+        console.error('Error loading categories:', err)
         setError(err.message || 'Failed to load categories')
         setCategories([])
       } finally {
@@ -112,4 +114,10 @@ function CategoryBrowser({ onSeriesSelect }) {
 }
 
 export default CategoryBrowser
+
+
+
+
+
+
 

@@ -82,25 +82,36 @@ export async function summarizeData(data) {
  * @returns {Promise<Object>} CategoryResponse with list of categories
  */
 export async function fetchCategories() {
-  const response = await fetch(`${API_BASE_URL}/api/categories`, {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  })
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/categories`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
 
-  if (!response.ok) {
-    let error
-    try {
-      error = await response.json()
-    } catch {
-      // If JSON parsing fails, use HTTP status message
-      error = {}
+    if (!response.ok) {
+      let error
+      try {
+        error = await response.json()
+      } catch {
+        // If JSON parsing fails, use HTTP status message
+        error = {}
+      }
+      throw new Error(error.detail || `HTTP error! status: ${response.status}`)
     }
-    throw new Error(error.detail || `HTTP error! status: ${response.status}`)
-  }
 
-  return await response.json()
+    return await response.json()
+  } catch (error) {
+    // Handle network errors (e.g., backend not running, CORS issues)
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      throw new Error(
+        `Failed to connect to backend at ${API_BASE_URL}. Please ensure the backend server is running.`
+      )
+    }
+    // Re-throw other errors
+    throw error
+  }
 }
 
 /**

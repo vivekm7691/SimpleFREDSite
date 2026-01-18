@@ -10,7 +10,8 @@
 import { useState, useEffect, useRef } from 'react'
 import './App.css'
 import { fetchFREDData, summarizeData } from './services/api'
-import CategoryBrowser from './components/CategoryBrowser'
+import Sidebar from './components/Sidebar'
+import DataGraph from './components/DataGraph'
 
 function App() {
   // State management for form input, loading, errors, and data
@@ -20,11 +21,13 @@ function App() {
   const [fredData, setFredData] = useState(null)
   const [summary, setSummary] = useState(null)
 
-  // State management for category browser
-  // These track the current state of category browsing for potential future use
-  // (e.g., URL params, analytics, persistence)
-  const [selectedCategoryId, setSelectedCategoryId] = useState(null)
-  const [categoryView, setCategoryView] = useState('grid') // 'grid' | 'detail'
+  // State management for sidebar
+  const [sidebarOpen, setSidebarOpen] = useState(true)
+  
+  // State management for tabs
+  const [activeTab, setActiveTab] = useState('main') // 'main' | 'analytics'
+  
+  // State management for category browser (for reset functionality)
   const [categoryBrowserKey, setCategoryBrowserKey] = useState(0) // Key to reset CategoryBrowser component
 
   // Ref for scrolling to data section
@@ -79,6 +82,9 @@ function App() {
       // Reset category browser after successful data fetch
       // This provides a clean state when user selects a new series
       resetCategoryBrowser()
+      
+      // Switch to Main Graph tab when data is loaded
+      setActiveTab('main')
     } catch (err) {
       setError(err.message || 'An error occurred while fetching data')
       setFredData(null)
@@ -89,12 +95,10 @@ function App() {
   }
 
   /**
-   * Reset category browser to initial state (grid view, no selected category).
+   * Reset category browser to initial state.
    * This is called after successful data fetch to provide a clean state.
    */
   const resetCategoryBrowser = () => {
-    setSelectedCategoryId(null)
-    setCategoryView('grid')
     // Force CategoryBrowser to reset by changing its key
     // This causes React to unmount and remount the component, resetting all internal state
     setCategoryBrowserKey((prev) => prev + 1)
@@ -111,17 +115,6 @@ function App() {
     // handleSubmit({ preventDefault: () => {} })
   }
 
-  /**
-   * Track category browser state changes for potential future use
-   * (e.g., URL params, analytics, browser history)
-   * Note: CategoryBrowser manages its own internal state, but we track
-   * the high-level state here for App-level coordination.
-   */
-  useEffect(() => {
-    // Future: Could sync selectedCategoryId and categoryView with URL params
-    // Future: Could track analytics events for category navigation
-    // For now, state is tracked but CategoryBrowser is self-contained
-  }, [selectedCategoryId, categoryView])
 
   return (
     <div className="App">
@@ -130,122 +123,147 @@ function App() {
         <p>Fetch and summarize economic data from FRED</p>
       </header>
 
-      <main className="App-main">
-        <form onSubmit={handleSubmit} className="search-form">
-          <div className="form-group">
-            <label htmlFor="seriesId">FRED Series ID:</label>
-            <input
-              id="seriesId"
-              type="text"
-              value={seriesId}
-              onChange={(e) => setSeriesId(e.target.value)}
-              placeholder="e.g., GDP, UNRATE, CPIAUCSL"
-              disabled={loading}
-            />
-          </div>
-          <button type="submit" disabled={loading}>
-            {loading ? (
-              <>
-                <span className="spinner"></span>
-                Loading...
-              </>
-            ) : (
-              'Fetch & Summarize'
-            )}
-          </button>
-        </form>
-
-        {error && (
-          <div className="error-message">
-            <strong>Error:</strong> {error}
-          </div>
-        )}
-
-        {/* Category Browser Section */}
-        <CategoryBrowser
+      <div className="App-container">
+        {/* Sidebar */}
+        <Sidebar
           key={categoryBrowserKey}
           onSeriesSelect={handleSeriesSelect}
         />
 
-        {fredData && (
-          <div className="data-section" ref={dataSectionRef}>
-            <h2>FRED Economic Data</h2>
-            {fredData.series_info && (
-              <div className="series-info">
-                <h3>{fredData.series_info.title || fredData.series_id}</h3>
-                <div className="info-grid">
-                  <div className="info-item">
-                    <span className="info-label">Series ID:</span>
-                    <span className="info-value">{fredData.series_info.id || fredData.series_id}</span>
-                  </div>
-                  {fredData.series_info.units && (
-                    <div className="info-item">
-                      <span className="info-label">Units:</span>
-                      <span className="info-value">{fredData.series_info.units}</span>
-                    </div>
-                  )}
-                  {fredData.series_info.frequency && (
-                    <div className="info-item">
-                      <span className="info-label">Frequency:</span>
-                      <span className="info-value">{fredData.series_info.frequency}</span>
-                    </div>
-                  )}
-                  {fredData.series_info.seasonal_adjustment && (
-                    <div className="info-item">
-                      <span className="info-label">Seasonal Adjustment:</span>
-                      <span className="info-value">{fredData.series_info.seasonal_adjustment}</span>
-                    </div>
-                  )}
-                  <div className="info-item">
-                    <span className="info-label">Observations:</span>
-                    <span className="info-value">{fredData.observation_count || 0}</span>
-                  </div>
-                </div>
-              </div>
-            )}
-            
-            {fredData.observations && fredData.observations.length > 0 && (
-              <div className="observations-section">
-                <h3>Recent Data Points</h3>
-                <div className="observations-table">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Date</th>
-                        <th>Value</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {fredData.observations.slice(0, 20).map((obs, index) => (
-                        <tr key={index}>
-                          <td>{obs.date}</td>
-                          <td>{obs.value !== null && obs.value !== undefined ? obs.value.toLocaleString() : 'N/A'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  {fredData.observations.length > 20 && (
-                    <p className="more-data">Showing 20 of {fredData.observations.length} observations</p>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {summary && (
-          <div className="summary-section">
-            <h2>AI-Powered Summary</h2>
-            <div className="summary-content">
-              {typeof summary === 'string' ? (
-                <p>{summary}</p>
-              ) : (
-                <p>{summary}</p>
-              )}
+        {/* Main Content Area */}
+        <main className="App-main">
+          <form onSubmit={handleSubmit} className="search-form">
+            <div className="form-group">
+              <label htmlFor="seriesId">FRED Series ID:</label>
+              <input
+                id="seriesId"
+                type="text"
+                value={seriesId}
+                onChange={(e) => setSeriesId(e.target.value)}
+                placeholder="e.g., GDP, UNRATE, CPIAUCSL"
+                disabled={loading}
+              />
             </div>
-          </div>
-        )}
-      </main>
+            <button type="submit" disabled={loading}>
+              {loading ? (
+                <>
+                  <span className="spinner"></span>
+                  Loading...
+                </>
+              ) : (
+                'Fetch & Summarize'
+              )}
+            </button>
+          </form>
+
+          {error && (
+            <div className="error-message">
+              <strong>Error:</strong> {error}
+            </div>
+          )}
+
+          {fredData && (
+            <div className="data-section" ref={dataSectionRef}>
+              {/* Series Info Card */}
+              {fredData.series_info && (
+                <div className="series-info">
+                  <h3>{fredData.series_info.title || fredData.series_id}</h3>
+                  <div className="info-grid">
+                    <div className="info-item">
+                      <span className="info-label">Series ID:</span>
+                      <span className="info-value">{fredData.series_info.id || fredData.series_id}</span>
+                    </div>
+                    {fredData.series_info.units && (
+                      <div className="info-item">
+                        <span className="info-label">Units:</span>
+                        <span className="info-value">{fredData.series_info.units}</span>
+                      </div>
+                    )}
+                    {fredData.series_info.frequency && (
+                      <div className="info-item">
+                        <span className="info-label">Frequency:</span>
+                        <span className="info-value">{fredData.series_info.frequency}</span>
+                      </div>
+                    )}
+                    {fredData.series_info.seasonal_adjustment && (
+                      <div className="info-item">
+                        <span className="info-label">Seasonal Adjustment:</span>
+                        <span className="info-value">{fredData.series_info.seasonal_adjustment}</span>
+                      </div>
+                    )}
+                    <div className="info-item">
+                      <span className="info-label">Observations:</span>
+                      <span className="info-value">{fredData.observation_count || 0}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Tab Navigation */}
+              <div className="tab-navigation">
+                <button
+                  className={`tab-button ${activeTab === 'main' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('main')}
+                  aria-selected={activeTab === 'main'}
+                >
+                  Main Graph
+                </button>
+                <button
+                  className={`tab-button ${activeTab === 'analytics' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('analytics')}
+                  aria-selected={activeTab === 'analytics'}
+                  disabled={true}
+                  title="Analytics features coming in Increment 5"
+                >
+                  Analytics
+                </button>
+              </div>
+
+              {/* Tab Content */}
+              <div className="tab-content">
+                {activeTab === 'main' && (
+                  <div className="tab-panel">
+                    {fredData.observations && fredData.observations.length > 0 ? (
+                      <DataGraph
+                        data={fredData}
+                        seriesInfo={fredData.series_info}
+                      />
+                    ) : (
+                      <div className="no-data-message">
+                        <p>No observations available to display</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {activeTab === 'analytics' && (
+                  <div className="tab-panel">
+                    <div className="analytics-placeholder">
+                      <p>Analytics features coming in Increment 5</p>
+                      <p className="placeholder-note">
+                        Correlation analysis, statistical summaries, aggregations, and more
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {summary && (
+            <div className="summary-section">
+              <h2>AI-Powered Summary</h2>
+              <div className="summary-content">
+                {typeof summary === 'string' ? (
+                  <p>{summary}</p>
+                ) : (
+                  <p>{summary}</p>
+                )}
+              </div>
+            </div>
+          )}
+        </main>
+      </div>
     </div>
   )
 }
