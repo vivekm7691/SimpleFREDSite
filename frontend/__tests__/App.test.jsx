@@ -328,8 +328,10 @@ describe('App Component', () => {
     const mockFREDData1 = {
       series_id: 'GDP',
       series_info: { id: 'GDP', title: 'GDP' },
-      observations: [],
-      observation_count: 0,
+      observations: [
+        { date: '2024-01-01', value: 25000.0 },
+      ],
+      observation_count: 1,
     }
 
     fetchFREDData.mockResolvedValueOnce(mockFREDData1)
@@ -344,7 +346,7 @@ describe('App Component', () => {
     await user.type(input, 'GDP')
     await user.click(submitButton)
 
-    // Wait for data to appear - check for data-graph instead of text
+    // Wait for data to appear - check for data-graph
     await waitFor(() => {
       expect(screen.getByTestId('data-graph')).toBeInTheDocument()
     })
