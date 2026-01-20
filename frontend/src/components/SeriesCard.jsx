@@ -59,11 +59,17 @@ function SeriesCard({ series, onSelect }) {
         onClick={handleSelect}
         aria-label={`Select series ${series.id}: ${series.title}`}
       >
-        Select Series
+        Select
       </button>
     </div>
   )
 }
 
 export default SeriesCard
+
+
+
+
+
+
 

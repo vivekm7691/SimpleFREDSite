@@ -5,7 +5,6 @@ Category service for organizing FRED series into browseable categories.
 from typing import List, Optional
 from app.models.schemas import CategoryInfo, SeriesListItem, CategorySeriesResponse
 
-
 # Curated category-to-series mapping
 CATEGORIES = {
     "employment": {

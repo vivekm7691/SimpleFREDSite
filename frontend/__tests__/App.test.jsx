@@ -4,19 +4,56 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from '../src/App'
-import { fetchFREDData, summarizeData } from '../src/services/api'
+import { fetchFREDData, summarizeData, fetchCategories } from '../src/services/api'
 
 // Mock the API service
 jest.mock('../src/services/api', () => ({
   fetchFREDData: jest.fn(),
   summarizeData: jest.fn(),
+  fetchCategories: jest.fn(),
 }))
 
+// Mock Sidebar component to avoid CategoryBrowser API calls in tests
+jest.mock('../src/components/Sidebar', () => {
+  return function MockSidebar({ onSeriesSelect }) {
+    return <div data-testid="sidebar">Mock Sidebar</div>
+  }
+})
+
+// Mock DataGraph component to avoid Chart.js canvas issues in jsdom
+jest.mock('../src/components/DataGraph', () => {
+  return function MockDataGraph({ data, seriesInfo }) {
+    if (!data || !data.observations || data.observations.length === 0) {
+      return <div data-testid="data-graph">No data available to display</div>
+    }
+    return (
+      <div data-testid="data-graph">
+        <div>Chart for {seriesInfo?.title || data.series_id}</div>
+        <div>Showing {data.observations.length} observations</div>
+      </div>
+    )
+  }
+})
+
 describe('App Component', () => {
+  const mockCategories = {
+    categories: [
+      {
+        id: 'employment',
+        name: 'Employment',
+        icon: '📊',
+        description: 'Labor market indicators',
+        series_count: 12,
+      },
+    ],
+  }
+
   beforeEach(() => {
     jest.clearAllMocks()
     // Mock scrollIntoView for jsdom (not fully implemented)
     Element.prototype.scrollIntoView = jest.fn()
+    // Mock fetchCategories to prevent errors from Sidebar/CategoryBrowser
+    fetchCategories.mockResolvedValue(mockCategories)
   })
 
   it('should render the app with header and form', () => {
@@ -101,21 +138,22 @@ describe('App Component', () => {
     expect(fetchFREDData).toHaveBeenCalledWith('GDP')
     expect(summarizeData).toHaveBeenCalledWith(mockFREDData)
 
-    // Wait for data to appear
+    // Wait for data to appear - check for series info instead of "FRED Economic Data"
     await waitFor(() => {
-      expect(screen.getByText('FRED Economic Data')).toBeInTheDocument()
+      expect(screen.getByText('Gross Domestic Product')).toBeInTheDocument()
     })
 
-    expect(screen.getByText('Gross Domestic Product')).toBeInTheDocument()
     expect(screen.getByText('GDP')).toBeInTheDocument()
     expect(screen.getByText('Billions of Dollars')).toBeInTheDocument()
     expect(screen.getByText('Quarterly')).toBeInTheDocument()
     expect(screen.getByText('2')).toBeInTheDocument()
 
-    // Check observations table
-    expect(screen.getByText('Recent Data Points')).toBeInTheDocument()
-    expect(screen.getByText('2024-01-01')).toBeInTheDocument()
-    expect(screen.getByText('25,000')).toBeInTheDocument()
+    // Check DataGraph is rendered (replaces observations table)
+    await waitFor(() => {
+      expect(screen.getByTestId('data-graph')).toBeInTheDocument()
+    })
+    expect(screen.getByText(/Chart for/i)).toBeInTheDocument()
+    expect(screen.getByText(/2 observations/i)).toBeInTheDocument()
 
     // Check summary
     await waitFor(() => {
@@ -154,7 +192,7 @@ describe('App Component', () => {
     // Wait for loading to complete
     await waitFor(() => {
       expect(screen.queryByText(/loading/i)).not.toBeInTheDocument()
-    })
+    }, { timeout: 2000 })
   })
 
   it('should handle API errors and display error message', async () => {
@@ -198,7 +236,7 @@ describe('App Component', () => {
     })
   })
 
-  it('should display observations table with formatted values', async () => {
+  it('should display DataGraph with observations', async () => {
     const user = userEvent.setup()
     const mockFREDData = {
       series_id: 'GDP',
@@ -222,17 +260,14 @@ describe('App Component', () => {
     await user.type(input, 'GDP')
     await user.click(submitButton)
 
+    // Check DataGraph is rendered (replaces observations table)
     await waitFor(() => {
-      expect(screen.getByText('Recent Data Points')).toBeInTheDocument()
+      expect(screen.getByTestId('data-graph')).toBeInTheDocument()
     })
-
-    // Check formatted values
-    expect(screen.getByText('25,000.5')).toBeInTheDocument()
-    expect(screen.getByText('N/A')).toBeInTheDocument() // null value
-    expect(screen.getByText('24,800.25')).toBeInTheDocument()
+    expect(screen.getByText(/3 observations/i)).toBeInTheDocument()
   })
 
-  it('should limit displayed observations to 20', async () => {
+  it('should display all observations in DataGraph', async () => {
     const user = userEvent.setup()
     const observations = Array.from({ length: 25 }, (_, i) => ({
       date: `2024-${String(i + 1).padStart(2, '0')}-01`,
@@ -257,9 +292,11 @@ describe('App Component', () => {
     await user.type(input, 'GDP')
     await user.click(submitButton)
 
+    // DataGraph shows all observations (no 20 limit like the old table)
     await waitFor(() => {
-      expect(screen.getByText(/showing 20 of 25 observations/i)).toBeInTheDocument()
+      expect(screen.getByTestId('data-graph')).toBeInTheDocument()
     })
+    expect(screen.getByText(/25 observations/i)).toBeInTheDocument()
   })
 
   it('should convert series ID to uppercase', async () => {
@@ -291,8 +328,10 @@ describe('App Component', () => {
     const mockFREDData1 = {
       series_id: 'GDP',
       series_info: { id: 'GDP', title: 'GDP' },
-      observations: [],
-      observation_count: 0,
+      observations: [
+        { date: '2024-01-01', value: 25000.0 },
+      ],
+      observation_count: 1,
     }
 
     fetchFREDData.mockResolvedValueOnce(mockFREDData1)
@@ -307,8 +346,9 @@ describe('App Component', () => {
     await user.type(input, 'GDP')
     await user.click(submitButton)
 
+    // Wait for data to appear - check for data-graph
     await waitFor(() => {
-      expect(screen.getByText('FRED Economic Data')).toBeInTheDocument()
+      expect(screen.getByTestId('data-graph')).toBeInTheDocument()
     })
 
     // Second submission with error
@@ -319,7 +359,7 @@ describe('App Component', () => {
     await user.click(submitButton)
 
     await waitFor(() => {
-      expect(screen.queryByText('FRED Economic Data')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('data-graph')).not.toBeInTheDocument()
       expect(screen.getByText(errorMessage)).toBeInTheDocument()
     })
   })

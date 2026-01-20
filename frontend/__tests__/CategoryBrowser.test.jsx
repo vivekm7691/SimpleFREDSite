@@ -1,7 +1,7 @@
 /**
  * Tests for CategoryBrowser component
  */
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import CategoryBrowser from '../src/components/CategoryBrowser'
 import { fetchCategories } from '../src/services/api'
@@ -114,9 +114,11 @@ describe('CategoryBrowser Component', () => {
       expect(screen.getByTestId('category-grid')).toBeInTheDocument()
     })
 
-    // Click on a category
+    // Click on a category - wrap in act to handle state updates
     const employmentButton = screen.getByTestId('category-employment')
-    await user.click(employmentButton)
+    await act(async () => {
+      await user.click(employmentButton)
+    })
 
     // Should show category detail view
     await waitFor(() => {
@@ -135,18 +137,22 @@ describe('CategoryBrowser Component', () => {
       expect(screen.getByTestId('category-grid')).toBeInTheDocument()
     })
 
-    // Click on a category
+    // Click on a category - wrap in act to handle state updates
     const employmentButton = screen.getByTestId('category-employment')
-    await user.click(employmentButton)
+    await act(async () => {
+      await user.click(employmentButton)
+    })
 
     // Wait for detail view
     await waitFor(() => {
       expect(screen.getByTestId('category-detail')).toBeInTheDocument()
     })
 
-    // Click back button
+    // Click back button - wrap in act to handle state updates
     const backButton = screen.getByTestId('back-button')
-    await user.click(backButton)
+    await act(async () => {
+      await user.click(backButton)
+    })
 
     // Should return to grid view
     await waitFor(() => {
@@ -164,9 +170,11 @@ describe('CategoryBrowser Component', () => {
       expect(screen.getByTestId('category-grid')).toBeInTheDocument()
     })
 
-    // Click on a category
+    // Click on a category - wrap in act to handle state updates
     const employmentButton = screen.getByTestId('category-employment')
-    await user.click(employmentButton)
+    await act(async () => {
+      await user.click(employmentButton)
+    })
 
     // Wait for detail view
     await waitFor(() => {
@@ -175,7 +183,9 @@ describe('CategoryBrowser Component', () => {
 
     // Click select series button
     const selectButton = screen.getByTestId('select-series-button')
-    await user.click(selectButton)
+    await act(async () => {
+      await user.click(selectButton)
+    })
 
     // Should call onSeriesSelect with series ID
     expect(mockOnSeriesSelect).toHaveBeenCalledTimes(1)
@@ -186,12 +196,19 @@ describe('CategoryBrowser Component', () => {
     const errorMessage = 'Failed to load categories'
     fetchCategories.mockRejectedValueOnce(new Error(errorMessage))
 
+    // Suppress console.error for this test since we're testing error handling
+    const originalError = console.error
+    console.error = jest.fn()
+
     render(<CategoryBrowser onSeriesSelect={mockOnSeriesSelect} />)
 
     await waitFor(() => {
       expect(screen.getByText(/error/i)).toBeInTheDocument()
       expect(screen.getByText(new RegExp(errorMessage, 'i'))).toBeInTheDocument()
     })
+
+    // Restore console.error
+    console.error = originalError
   })
 
   it('should handle empty categories response', async () => {
@@ -216,9 +233,11 @@ describe('CategoryBrowser Component', () => {
       expect(screen.getByTestId('category-grid')).toBeInTheDocument()
     })
 
-    // Click on a category
+    // Click on a category - wrap in act to handle state updates
     const employmentButton = screen.getByTestId('category-employment')
-    await user.click(employmentButton)
+    await act(async () => {
+      await user.click(employmentButton)
+    })
 
     // Wait for detail view
     await waitFor(() => {
@@ -227,7 +246,9 @@ describe('CategoryBrowser Component', () => {
 
     // Click select series button
     const selectButton = screen.getByTestId('select-series-button')
-    await user.click(selectButton)
+    await act(async () => {
+      await user.click(selectButton)
+    })
 
     // Should not throw error, just not call anything
     expect(mockOnSeriesSelect).not.toHaveBeenCalled()
@@ -245,9 +266,11 @@ describe('CategoryBrowser Component', () => {
     // Manually trigger category click with a category that doesn't exist in the list
     // This simulates edge case where category might be selected but not in categories array
     const grid = screen.getByTestId('category-grid')
-    // Simulate clicking a category that exists
+    // Simulate clicking a category that exists - wrap in act to handle state updates
     const employmentButton = screen.getByTestId('category-employment')
-    await user.click(employmentButton)
+    await act(async () => {
+      await user.click(employmentButton)
+    })
 
     // Should still show detail view
     await waitFor(() => {
@@ -255,4 +278,10 @@ describe('CategoryBrowser Component', () => {
     })
   })
 })
+
+
+
+
+
+
 
