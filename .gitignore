@@ -73,3 +73,6 @@ build/
 Thumbs.db
 .DS_Store
 
+# Spark data directory (Parquet files, cached data)
+data/
+
