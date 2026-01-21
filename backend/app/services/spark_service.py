@@ -43,7 +43,9 @@ class SparkService:
             # Serialization
             conf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
             # Logging
-            conf.set("spark.eventLog.enabled", "false")  # Disable event log for local mode
+            conf.set(
+                "spark.eventLog.enabled", "false"
+            )  # Disable event log for local mode
 
             # Create SparkSession
             self._spark_session = SparkSession.builder.config(conf=conf).getOrCreate()
@@ -123,4 +125,3 @@ def get_spark_service() -> SparkService:
     if _spark_service is None:
         _spark_service = SparkService()
     return _spark_service
-
