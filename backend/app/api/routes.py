@@ -16,6 +16,7 @@ from app.models.schemas import (
 )
 from app.services.fred_service import get_fred_service
 from app.services.category_service import get_category_service
+from app.services.spark_service import get_spark_service
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -191,4 +192,44 @@ async def get_category_series(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error fetching category series: {str(e)}",
+        )
+
+
+@router.get("/spark/health")
+async def spark_health_check():
+    """
+    Health check endpoint to verify Spark connectivity and availability.
+
+    Returns:
+        JSON response with Spark status and version information
+
+    Raises:
+        HTTPException: If Spark is not available
+    """
+    try:
+        spark_service = get_spark_service()
+        is_available = spark_service.is_available()
+
+        if not is_available:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Spark service is not available",
+            )
+
+        spark = spark_service.spark
+        version = spark.version
+
+        return {
+            "status": "healthy",
+            "service": "Spark",
+            "version": version,
+            "available": True,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error checking Spark health: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error checking Spark health: {str(e)}",
         )

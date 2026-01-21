@@ -10,6 +10,10 @@ services:
       - FRED_API_KEY=${FRED_API_KEY}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - PYTHONUNBUFFERED=1
+      - DATA_DIR=/app/data
+    volumes:
+      # Data directory for Spark (Parquet files stored on host machine)
+      - ./data:/app/data
     # Optional: Uncomment volumes for development hot-reload
     # volumes:
     #   - ./backend/app:/app/app:ro

@@ -5,9 +5,16 @@ FROM python:3.11-slim AS builder
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies for building Python packages
+# Install system dependencies for building Python packages and Java runtime (required for Spark)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
+    wget \
+    gnupg \
+    && mkdir -p /etc/apt/keyrings \
+    && wget -O - https://packages.adoptium.net/artifactory/api/gpg/key/public | gpg --dearmor -o /etc/apt/keyrings/adoptium.gpg \
+    && echo "deb [signed-by=/etc/apt/keyrings/adoptium.gpg] https://packages.adoptium.net/artifactory/deb $(awk -F= '/^VERSION_CODENAME/{print$2}' /etc/os-release) main" | tee /etc/apt/sources.list.d/adoptium.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends temurin-17-jdk \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements file
@@ -25,13 +32,26 @@ FROM python:3.11-slim
 # Set working directory
 WORKDIR /app
 
+# Install Java 17 from Temurin (required for Spark at runtime)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget \
+    gnupg \
+    && mkdir -p /etc/apt/keyrings \
+    && wget -O - https://packages.adoptium.net/artifactory/api/gpg/key/public | gpg --dearmor -o /etc/apt/keyrings/adoptium.gpg \
+    && echo "deb [signed-by=/etc/apt/keyrings/adoptium.gpg] https://packages.adoptium.net/artifactory/deb $(awk -F= '/^VERSION_CODENAME/{print$2}' /etc/os-release) main" | tee /etc/apt/sources.list.d/adoptium.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends temurin-17-jdk \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copy virtual environment from builder stage
 COPY --from=builder /opt/venv /opt/venv
 
 # Set environment variables
 ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
+    PYTHONDONTWRITEBYTECODE=1 \
+    JAVA_HOME=/usr/lib/jvm/temurin-17-jdk-amd64 \
+    SPARK_HOME=/opt/venv/lib/python3.11/site-packages/pyspark
 
 # Create non-root user for security
 RUN useradd -m -u 1000 appuser && \
