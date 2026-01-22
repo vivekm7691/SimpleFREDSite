@@ -3,7 +3,7 @@ Spark data service for batch processing FRED series data.
 """
 
 import logging
-from typing import List, Optional
+from typing import List
 import asyncio
 from pyspark.sql import DataFrame
 from pyspark.sql.types import (
@@ -13,7 +13,7 @@ from pyspark.sql.types import (
     DoubleType,
 )
 
-from app.models.schemas import FREDDataResponse, FREDObservation
+from app.models.schemas import FREDDataResponse
 from app.services.fred_service import FREDService
 from app.services.spark_service import SparkService
 
