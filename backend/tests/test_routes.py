@@ -1,9 +1,10 @@
 """
 Tests for API routes (FRED data fetching and summarization endpoints).
 """
+
 import pytest
 from fastapi import status
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 from httpx import HTTPStatusError, Response
 
 from app.models.schemas import FREDDataResponse, FREDSeriesInfo, FREDObservation
@@ -11,7 +12,7 @@ from app.models.schemas import FREDDataResponse, FREDSeriesInfo, FREDObservation
 
 class TestFREDFetchEndpoint:
     """Test cases for the FRED data fetching endpoint."""
-    
+
     @pytest.mark.asyncio
     async def test_fetch_fred_data_success(self, async_client, mock_fred_service):
         """Test successful FRED data fetch."""
@@ -23,23 +24,20 @@ class TestFREDFetchEndpoint:
                 title="Gross Domestic Product",
                 units="Billions of Dollars",
                 frequency="Quarterly",
-                seasonal_adjustment="Seasonally Adjusted Annual Rate"
+                seasonal_adjustment="Seasonally Adjusted Annual Rate",
             ),
             observations=[
                 FREDObservation(date="2024-01-01", value=25000.0),
                 FREDObservation(date="2023-10-01", value=24800.0),
             ],
-            observation_count=2
+            observation_count=2,
         )
-        
+
         mock_fred_service.fetch_series = AsyncMock(return_value=mock_response)
-        
+
         # Make request
-        response = await async_client.post(
-            "/api/fred/fetch",
-            json={"series_id": "GDP"}
-        )
-        
+        response = await async_client.post("/api/fred/fetch", json={"series_id": "GDP"})
+
         # Assertions
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
@@ -48,58 +46,66 @@ class TestFREDFetchEndpoint:
         assert len(data["observations"]) == 2
         assert data["observation_count"] == 2
         mock_fred_service.fetch_series.assert_called_once_with("GDP")
-    
+
     @pytest.mark.asyncio
-    async def test_fetch_fred_data_series_not_found(self, async_client, mock_fred_service):
+    async def test_fetch_fred_data_series_not_found(
+        self, async_client, mock_fred_service
+    ):
         """Test FRED data fetch when series is not found."""
         # Setup mock to raise ValueError (series not found)
-        mock_fred_service.fetch_series = AsyncMock(side_effect=ValueError("Series 'INVALID' not found"))
-        
+        mock_fred_service.fetch_series = AsyncMock(
+            side_effect=ValueError("Series 'INVALID' not found")
+        )
+
         # Make request
         response = await async_client.post(
-            "/api/fred/fetch",
-            json={"series_id": "INVALID"}
+            "/api/fred/fetch", json={"series_id": "INVALID"}
         )
-        
+
         # Assertions
         assert response.status_code == status.HTTP_404_NOT_FOUND
         data = response.json()
         assert "not found" in data["detail"].lower()
-    
+
     @pytest.mark.asyncio
-    async def test_fetch_fred_data_internal_error(self, async_client, mock_fred_service):
+    async def test_fetch_fred_data_internal_error(
+        self, async_client, mock_fred_service
+    ):
         """Test FRED data fetch when internal error occurs."""
         # Setup mock to raise generic exception
-        mock_fred_service.fetch_series = AsyncMock(side_effect=Exception("Internal server error"))
-        
-        # Make request
-        response = await async_client.post(
-            "/api/fred/fetch",
-            json={"series_id": "GDP"}
+        mock_fred_service.fetch_series = AsyncMock(
+            side_effect=Exception("Internal server error")
         )
-        
+
+        # Make request
+        response = await async_client.post("/api/fred/fetch", json={"series_id": "GDP"})
+
         # Assertions
         assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
         data = response.json()
         assert "error" in data["detail"].lower()
-    
+
     def test_fetch_fred_data_invalid_request(self, client):
         """Test FRED data fetch with invalid request body."""
         # Missing series_id
         response = client.post("/api/fred/fetch", json={})
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
-        
+
         # Empty series_id
         response = client.post("/api/fred/fetch", json={"series_id": ""})
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
-    
+
     def test_fetch_fred_data_series_id_validation(self, client):
         """Test that series_id is validated and normalized."""
         # Test with lowercase - should be converted to uppercase
         response = client.post("/api/fred/fetch", json={"series_id": "gdp"})
         # Should pass validation (will fail at service level if not found, but validation should pass)
-        assert response.status_code in [status.HTTP_200_OK, status.HTTP_404_NOT_FOUND, status.HTTP_500_INTERNAL_SERVER_ERROR]
-    
+        assert response.status_code in [
+            status.HTTP_200_OK,
+            status.HTTP_404_NOT_FOUND,
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+        ]
+
     def test_fetch_fred_data_invalid_characters(self, client):
         """Test FRED data fetch with invalid characters in series_id."""
         # Invalid characters
@@ -109,81 +115,91 @@ class TestFREDFetchEndpoint:
 
 class TestSummarizeEndpoint:
     """Test cases for the summarization endpoint."""
-    
+
     @pytest.mark.asyncio
-    async def test_summarize_success(self, async_client, mock_gemini_service, monkeypatch):
+    async def test_summarize_success(
+        self, async_client, mock_gemini_service, monkeypatch
+    ):
         """Test successful data summarization."""
         # Mock environment variables and file system for routes.py
         test_key = "AIzaSyCfeYlom4MDQVu4TyY5ciXXYnhnP9_testkey"
         monkeypatch.setenv("GEMINI_API_KEY", test_key)
-        monkeypatch.setattr("pathlib.Path.exists", lambda x: False)  # Prevent .env loading
-        
+        monkeypatch.setattr(
+            "pathlib.Path.exists", lambda x: False
+        )  # Prevent .env loading
+
         # Setup mock response
         mock_gemini_service.summarize_data = AsyncMock(
             return_value="This is a test summary of the economic data."
         )
-        
+
         # Make request
         response = await async_client.post(
             "/api/summarize",
-            json={"data": {"series_info": {"title": "GDP"}, "observations": []}}
+            json={"data": {"series_info": {"title": "GDP"}, "observations": []}},
         )
-        
+
         # Assertions
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
         assert "summary" in data
         assert data["summary"] == "This is a test summary of the economic data."
         mock_gemini_service.summarize_data.assert_called_once()
-    
+
     @pytest.mark.asyncio
-    async def test_summarize_api_error(self, async_client, mock_gemini_service, monkeypatch):
+    async def test_summarize_api_error(
+        self, async_client, mock_gemini_service, monkeypatch
+    ):
         """Test summarization when Gemini API fails."""
         # Mock environment variables and file system for routes.py
         test_key = "AIzaSyCfeYlom4MDQVu4TyY5ciXXYnhnP9_testkey"
         monkeypatch.setenv("GEMINI_API_KEY", test_key)
-        monkeypatch.setattr("pathlib.Path.exists", lambda x: False)  # Prevent .env loading
-        
+        monkeypatch.setattr(
+            "pathlib.Path.exists", lambda x: False
+        )  # Prevent .env loading
+
         # Setup mock to raise exception
         mock_gemini_service.summarize_data = AsyncMock(
             side_effect=Exception("Gemini API error")
         )
-        
+
         # Make request
         response = await async_client.post(
-            "/api/summarize",
-            json={"data": {"test": "data"}}
+            "/api/summarize", json={"data": {"test": "data"}}
         )
-        
+
         # Assertions
         assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
         data = response.json()
         assert "error" in data["detail"].lower()
-    
+
     @pytest.mark.asyncio
-    async def test_summarize_value_error(self, async_client, mock_gemini_service, monkeypatch):
+    async def test_summarize_value_error(
+        self, async_client, mock_gemini_service, monkeypatch
+    ):
         """Test summarization when ValueError is raised."""
         # Mock environment variables and file system for routes.py
         test_key = "AIzaSyCfeYlom4MDQVu4TyY5ciXXYnhnP9_testkey"
         monkeypatch.setenv("GEMINI_API_KEY", test_key)
-        monkeypatch.setattr("pathlib.Path.exists", lambda x: False)  # Prevent .env loading
-        
+        monkeypatch.setattr(
+            "pathlib.Path.exists", lambda x: False
+        )  # Prevent .env loading
+
         # Setup mock to raise ValueError
         mock_gemini_service.summarize_data = AsyncMock(
             side_effect=ValueError("Invalid API key")
         )
-        
+
         # Make request
         response = await async_client.post(
-            "/api/summarize",
-            json={"data": {"test": "data"}}
+            "/api/summarize", json={"data": {"test": "data"}}
         )
-        
+
         # Assertions
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         data = response.json()
         assert "Invalid API key" in data["detail"]
-    
+
     def test_summarize_invalid_request(self, client):
         """Test summarize endpoint with invalid request."""
         # Missing data field
@@ -199,20 +215,21 @@ class TestCategoryEndpoints:
         """Test successful retrieval of all categories."""
         # Setup mock response
         from app.models.schemas import CategoryInfo
+
         mock_categories = [
             CategoryInfo(
                 id="employment",
                 name="Employment",
                 icon="📊",
                 description="Labor market indicators",
-                series_count=12
+                series_count=12,
             ),
             CategoryInfo(
                 id="inflation",
                 name="Inflation",
                 icon="📈",
                 description="Price level and inflation indicators",
-                series_count=10
+                series_count=10,
             ),
         ]
         mock_category_service.get_all_categories.return_value = mock_categories
@@ -234,7 +251,9 @@ class TestCategoryEndpoints:
     async def test_get_categories_error(self, async_client, mock_category_service):
         """Test categories endpoint when service raises an error."""
         # Setup mock to raise exception
-        mock_category_service.get_all_categories.side_effect = Exception("Service error")
+        mock_category_service.get_all_categories.side_effect = Exception(
+            "Service error"
+        )
 
         # Make request
         response = await async_client.get("/api/categories")
@@ -245,10 +264,13 @@ class TestCategoryEndpoints:
         assert "error" in data["detail"].lower()
 
     @pytest.mark.asyncio
-    async def test_get_category_series_success(self, async_client, mock_category_service, mock_fred_service):
+    async def test_get_category_series_success(
+        self, async_client, mock_category_service, mock_fred_service
+    ):
         """Test successful retrieval of series for a category."""
         # Setup mock response
         from app.models.schemas import CategorySeriesResponse, SeriesListItem
+
         mock_response = CategorySeriesResponse(
             category_id="employment",
             category_name="Employment",
@@ -258,19 +280,21 @@ class TestCategoryEndpoints:
                     title="Unemployment Rate",
                     frequency="Monthly",
                     units="Percent",
-                    seasonal_adjustment="Seasonally Adjusted"
+                    seasonal_adjustment="Seasonally Adjusted",
                 ),
                 SeriesListItem(
                     id="PAYEMS",
                     title="Nonfarm Payroll Employment",
                     frequency="Monthly",
                     units="Thousands of Persons",
-                    seasonal_adjustment="Seasonally Adjusted"
+                    seasonal_adjustment="Seasonally Adjusted",
                 ),
             ],
-            total_count=2
+            total_count=2,
         )
-        mock_category_service.get_category_series = AsyncMock(return_value=mock_response)
+        mock_category_service.get_category_series = AsyncMock(
+            return_value=mock_response
+        )
 
         # Make request
         response = await async_client.get("/api/categories/employment")
@@ -287,10 +311,13 @@ class TestCategoryEndpoints:
         mock_category_service.get_category_series.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_get_category_series_with_search(self, async_client, mock_category_service, mock_fred_service):
+    async def test_get_category_series_with_search(
+        self, async_client, mock_category_service, mock_fred_service
+    ):
         """Test category series endpoint with search query parameter."""
         # Setup mock response
         from app.models.schemas import CategorySeriesResponse, SeriesListItem
+
         mock_response = CategorySeriesResponse(
             category_id="employment",
             category_name="Employment",
@@ -300,12 +327,14 @@ class TestCategoryEndpoints:
                     title="Unemployment Rate",
                     frequency="Monthly",
                     units="Percent",
-                    seasonal_adjustment="Seasonally Adjusted"
+                    seasonal_adjustment="Seasonally Adjusted",
                 ),
             ],
-            total_count=1
+            total_count=1,
         )
-        mock_category_service.get_category_series = AsyncMock(return_value=mock_response)
+        mock_category_service.get_category_series = AsyncMock(
+            return_value=mock_response
+        )
 
         # Make request with search parameter
         response = await async_client.get("/api/categories/employment?q=UN")
@@ -320,7 +349,9 @@ class TestCategoryEndpoints:
         assert call_args.kwargs["search_term"] == "UN"
 
     @pytest.mark.asyncio
-    async def test_get_category_series_not_found(self, async_client, mock_category_service, mock_fred_service):
+    async def test_get_category_series_not_found(
+        self, async_client, mock_category_service, mock_fred_service
+    ):
         """Test category series endpoint when category is not found."""
         # Setup mock to raise ValueError (category not found)
         mock_category_service.get_category_series = AsyncMock(
@@ -336,7 +367,9 @@ class TestCategoryEndpoints:
         assert "not found" in data["detail"].lower()
 
     @pytest.mark.asyncio
-    async def test_get_category_series_internal_error(self, async_client, mock_category_service, mock_fred_service):
+    async def test_get_category_series_internal_error(
+        self, async_client, mock_category_service, mock_fred_service
+    ):
         """Test category series endpoint when internal error occurs."""
         # Setup mock to raise generic exception
         mock_category_service.get_category_series = AsyncMock(
@@ -352,10 +385,13 @@ class TestCategoryEndpoints:
         assert "error" in data["detail"].lower()
 
     @pytest.mark.asyncio
-    async def test_get_category_series_empty_search(self, async_client, mock_category_service, mock_fred_service):
+    async def test_get_category_series_empty_search(
+        self, async_client, mock_category_service, mock_fred_service
+    ):
         """Test category series endpoint with empty search term returns all series."""
         # Setup mock response
         from app.models.schemas import CategorySeriesResponse, SeriesListItem
+
         mock_response = CategorySeriesResponse(
             category_id="employment",
             category_name="Employment",
@@ -363,9 +399,11 @@ class TestCategoryEndpoints:
                 SeriesListItem(id="UNRATE", title="UNRATE"),
                 SeriesListItem(id="PAYEMS", title="PAYEMS"),
             ],
-            total_count=2
+            total_count=2,
         )
-        mock_category_service.get_category_series = AsyncMock(return_value=mock_response)
+        mock_category_service.get_category_series = AsyncMock(
+            return_value=mock_response
+        )
 
         # Make request with empty search parameter
         response = await async_client.get("/api/categories/employment?q=")
@@ -375,3 +413,302 @@ class TestCategoryEndpoints:
         data = response.json()
         assert len(data["series"]) == 2
 
+
+class TestSparkHealthEndpoint:
+    """Test cases for the Spark health check endpoint."""
+
+    @pytest.mark.asyncio
+    async def test_spark_health_success(self, async_client, mock_spark_service):
+        """Test successful Spark health check."""
+        # Setup mock response
+        mock_spark_service.is_available.return_value = True
+        mock_spark_service.spark.version = "3.5.0"
+
+        # Make request
+        response = await async_client.get("/api/spark/health")
+
+        # Assertions
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["status"] == "healthy"
+        assert data["service"] == "Spark"
+        assert data["version"] == "3.5.0"
+        assert data["available"] is True
+        mock_spark_service.is_available.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_spark_health_unavailable(self, async_client, mock_spark_service):
+        """Test Spark health check when Spark is unavailable."""
+        # Setup mock to return False for availability
+        mock_spark_service.is_available.return_value = False
+
+        # Make request
+        response = await async_client.get("/api/spark/health")
+
+        # Assertions
+        assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+        data = response.json()
+        assert "not available" in data["detail"].lower()
+
+    @pytest.mark.asyncio
+    async def test_spark_health_error(self, async_client, mock_spark_service):
+        """Test Spark health check when an error occurs."""
+        # Setup mock to raise exception
+        mock_spark_service.is_available.side_effect = Exception("Spark error")
+
+        # Make request
+        response = await async_client.get("/api/spark/health")
+
+        # Assertions
+        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        data = response.json()
+        assert "error" in data["detail"].lower()
+
+
+class TestBatchFetchEndpoint:
+    """Test cases for the Spark batch fetch endpoint."""
+
+    @pytest.mark.asyncio
+    async def test_batch_fetch_success(
+        self,
+        async_client,
+        mock_spark_service,
+        mock_fred_service,
+        mock_spark_data_service,
+    ):
+        """Test successful batch fetch of multiple series."""
+        from app.models.schemas import FREDDataResponse, FREDSeriesInfo, FREDObservation
+
+        # Setup mock FRED responses
+        mock_responses = [
+            FREDDataResponse(
+                series_id="GDP",
+                series_info=FREDSeriesInfo(
+                    id="GDP",
+                    title="Gross Domestic Product",
+                    units="Billions of Dollars",
+                    frequency="Quarterly",
+                    seasonal_adjustment=None,
+                ),
+                observations=[
+                    FREDObservation(date="2024-01-01", value=25000.0),
+                    FREDObservation(date="2023-10-01", value=24800.0),
+                ],
+                observation_count=2,
+            ),
+            FREDDataResponse(
+                series_id="UNRATE",
+                series_info=FREDSeriesInfo(
+                    id="UNRATE",
+                    title="Unemployment Rate",
+                    units="Percent",
+                    frequency="Monthly",
+                    seasonal_adjustment=None,
+                ),
+                observations=[
+                    FREDObservation(date="2024-01-01", value=3.5),
+                    FREDObservation(date="2023-12-01", value=3.6),
+                ],
+                observation_count=2,
+            ),
+        ]
+
+        # Setup mock DataFrame dictionary
+        mock_data_dict = {
+            "columns": ["series_id", "date", "value", "title", "units", "frequency"],
+            "data": [
+                {
+                    "series_id": "GDP",
+                    "date": "2024-01-01",
+                    "value": 25000.0,
+                    "title": "Gross Domestic Product",
+                    "units": "Billions of Dollars",
+                    "frequency": "Quarterly",
+                },
+                {
+                    "series_id": "GDP",
+                    "date": "2023-10-01",
+                    "value": 24800.0,
+                    "title": "Gross Domestic Product",
+                    "units": "Billions of Dollars",
+                    "frequency": "Quarterly",
+                },
+                {
+                    "series_id": "UNRATE",
+                    "date": "2024-01-01",
+                    "value": 3.5,
+                    "title": "Unemployment Rate",
+                    "units": "Percent",
+                    "frequency": "Monthly",
+                },
+                {
+                    "series_id": "UNRATE",
+                    "date": "2023-12-01",
+                    "value": 3.6,
+                    "title": "Unemployment Rate",
+                    "units": "Percent",
+                    "frequency": "Monthly",
+                },
+            ],
+            "row_count": 4,
+        }
+
+        # Setup mocks
+        mock_spark_service.is_available.return_value = True
+        mock_spark_data_service.batch_fetch_series = AsyncMock(
+            return_value=mock_responses
+        )
+        mock_spark_data_service.convert_to_dataframe = MagicMock(
+            return_value=MagicMock()
+        )
+        mock_spark_data_service.aggregate_series_data = MagicMock(
+            return_value=MagicMock()
+        )
+        mock_spark_data_service.dataframe_to_dict = MagicMock(
+            return_value=mock_data_dict
+        )
+
+        # Make request
+        response = await async_client.post(
+            "/api/spark/batch-fetch",
+            json={"series_ids": ["GDP", "UNRATE"], "limit": 10, "sort_order": "desc"},
+        )
+
+        # Assertions
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["series_count"] == 2
+        assert data["total_observations"] == 4
+        assert len(data["columns"]) == 6
+        assert len(data["data"]) == 4
+        assert len(data["series_info"]) == 2
+        assert data["series_info"][0]["series_id"] == "GDP"
+        assert data["series_info"][1]["series_id"] == "UNRATE"
+        mock_spark_service.is_available.assert_called_once()
+        mock_spark_data_service.batch_fetch_series.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_batch_fetch_spark_unavailable(
+        self, async_client, mock_spark_service, mock_fred_service
+    ):
+        """Test batch fetch when Spark is unavailable."""
+        # Setup mock to return False for availability
+        mock_spark_service.is_available.return_value = False
+
+        # Make request
+        response = await async_client.post(
+            "/api/spark/batch-fetch",
+            json={"series_ids": ["GDP", "UNRATE"], "limit": 10, "sort_order": "desc"},
+        )
+
+        # Assertions
+        assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+        data = response.json()
+        assert "not available" in data["detail"].lower()
+
+    @pytest.mark.asyncio
+    async def test_batch_fetch_invalid_request(self, client):
+        """Test batch fetch with invalid request body."""
+        # Missing series_ids
+        response = client.post("/api/spark/batch-fetch", json={})
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+        # Empty series_ids
+        response = client.post("/api/spark/batch-fetch", json={"series_ids": []})
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+        # Too many series_ids (max 50)
+        response = client.post(
+            "/api/spark/batch-fetch",
+            json={"series_ids": [f"SERIES{i}" for i in range(51)]},
+        )
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+        # Invalid limit (too high)
+        response = client.post(
+            "/api/spark/batch-fetch",
+            json={"series_ids": ["GDP"], "limit": 2000},
+        )
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+        # Invalid sort_order
+        response = client.post(
+            "/api/spark/batch-fetch",
+            json={"series_ids": ["GDP"], "sort_order": "invalid"},
+        )
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+    @pytest.mark.asyncio
+    async def test_batch_fetch_series_id_validation(self, client):
+        """Test that series_ids are validated and normalized."""
+        # Test with lowercase - should be converted to uppercase
+        response = client.post(
+            "/api/spark/batch-fetch",
+            json={"series_ids": ["gdp", "unrate"]},
+        )
+        # Should pass validation (will fail at service level if not found, but validation should pass)
+        assert response.status_code in [
+            status.HTTP_200_OK,
+            status.HTTP_404_NOT_FOUND,
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+        ]
+
+        # Invalid characters
+        response = client.post(
+            "/api/spark/batch-fetch",
+            json={"series_ids": ["GDP@123"]},
+        )
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+    @pytest.mark.asyncio
+    async def test_batch_fetch_internal_error(
+        self,
+        async_client,
+        mock_spark_service,
+        mock_fred_service,
+        mock_spark_data_service,
+    ):
+        """Test batch fetch when internal error occurs."""
+        # Setup mocks
+        mock_spark_service.is_available.return_value = True
+        mock_spark_data_service.batch_fetch_series = AsyncMock(
+            side_effect=Exception("Internal server error")
+        )
+
+        # Make request
+        response = await async_client.post(
+            "/api/spark/batch-fetch",
+            json={"series_ids": ["GDP", "UNRATE"], "limit": 10, "sort_order": "desc"},
+        )
+
+        # Assertions
+        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        data = response.json()
+        assert "error" in data["detail"].lower()
+
+    @pytest.mark.asyncio
+    async def test_batch_fetch_value_error(
+        self,
+        async_client,
+        mock_spark_service,
+        mock_fred_service,
+        mock_spark_data_service,
+    ):
+        """Test batch fetch when ValueError is raised."""
+        # Setup mocks
+        mock_spark_service.is_available.return_value = True
+        mock_spark_data_service.batch_fetch_series = AsyncMock(
+            side_effect=ValueError("Invalid series IDs")
+        )
+
+        # Make request
+        response = await async_client.post(
+            "/api/spark/batch-fetch",
+            json={"series_ids": ["GDP", "UNRATE"], "limit": 10, "sort_order": "desc"},
+        )
+
+        # Assertions
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        data = response.json()
+        assert "Invalid series IDs" in data["detail"]

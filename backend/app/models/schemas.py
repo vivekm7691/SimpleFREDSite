@@ -103,3 +103,57 @@ class CategorySeriesResponse(BaseModel):
     category_name: str = Field(..., description="Category name")
     series: List[SeriesListItem] = Field(..., description="List of series in category")
     total_count: int = Field(..., description="Total number of series in category")
+
+
+# Spark batch processing models
+
+
+class BatchFetchRequest(BaseModel):
+    """Request model for batch fetching multiple FRED series."""
+
+    series_ids: List[str] = Field(
+        ...,
+        min_length=1,
+        max_length=50,
+        description="List of FRED series IDs to fetch",
+    )
+    limit: int = Field(
+        default=100, ge=1, le=1000, description="Maximum observations per series"
+    )
+    sort_order: str = Field(
+        default="desc", pattern="^(asc|desc)$", description="Sort order"
+    )
+    aggregation_type: str = Field(
+        default="union",
+        description="Type of aggregation to perform",
+    )
+
+    @field_validator("series_ids")
+    @classmethod
+    def validate_series_ids(cls, v: List[str]) -> List[str]:
+        """Validate series IDs format."""
+        if not v:
+            raise ValueError("At least one series ID is required")
+        if len(v) > 50:
+            raise ValueError("Maximum 50 series IDs allowed per request")
+        # Validate each series ID
+        validated = []
+        for series_id in v:
+            if not series_id.strip():
+                raise ValueError("Series ID cannot be empty")
+            if not series_id.replace("_", "").replace("-", "").isalnum():
+                raise ValueError(f"Series ID '{series_id}' contains invalid characters")
+            validated.append(series_id.strip().upper())
+        return validated
+
+
+class BatchFetchResponse(BaseModel):
+    """Response model for batch fetch operation."""
+
+    series_count: int = Field(..., description="Number of series processed")
+    total_observations: int = Field(..., description="Total number of observations")
+    columns: List[str] = Field(..., description="Column names in the data")
+    data: List[dict] = Field(..., description="Combined data from all series")
+    series_info: List[dict] = Field(
+        ..., description="Metadata for each series processed"
+    )
