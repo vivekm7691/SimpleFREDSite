@@ -712,3 +712,299 @@ class TestBatchFetchEndpoint:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         data = response.json()
         assert "Invalid series IDs" in data["detail"]
+
+
+class TestCacheEndpoints:
+    """Test cases for cache management endpoints."""
+
+    @pytest.mark.asyncio
+    async def test_get_cache_stats_success(
+        self,
+        async_client,
+        mock_spark_service,
+        mock_fred_service,
+        mock_spark_data_service,
+    ):
+        """Test successful cache stats retrieval."""
+        # Setup mocks
+        mock_spark_service.is_available.return_value = True
+        mock_spark_data_service.get_cache_stats = MagicMock(
+            return_value={
+                "total_files": 5,
+                "unique_series": 3,
+                "total_size_bytes": 1024000,
+                "total_size_mb": 0.98,
+            }
+        )
+
+        # Make request
+        response = await async_client.get("/api/spark/cache/stats")
+
+        # Assertions
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["total_files"] == 5
+        assert data["unique_series"] == 3
+        assert data["total_size_bytes"] == 1024000
+        assert data["total_size_mb"] == 0.98
+
+    @pytest.mark.asyncio
+    async def test_get_cache_stats_spark_unavailable(
+        self, async_client, mock_spark_service
+    ):
+        """Test cache stats when Spark is unavailable."""
+        mock_spark_service.is_available.return_value = False
+
+        response = await async_client.get("/api/spark/cache/stats")
+
+        assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+
+    @pytest.mark.asyncio
+    async def test_list_cached_series_success(
+        self,
+        async_client,
+        mock_spark_service,
+        mock_fred_service,
+        mock_spark_data_service,
+    ):
+        """Test successful cache list retrieval."""
+        # Setup mocks
+        mock_spark_service.is_available.return_value = True
+        mock_cache_entries = [
+            {
+                "series_id": "GDP",
+                "limit": 100,
+                "sort_order": "desc",
+                "file_size": 512000,
+                "modified_time": "2024-01-01T12:00:00",
+                "cache_path": "/app/data/cache/GDP_100_desc.parquet",
+            },
+            {
+                "series_id": "UNRATE",
+                "limit": 50,
+                "sort_order": "asc",
+                "file_size": 256000,
+                "modified_time": "2024-01-01T13:00:00",
+                "cache_path": "/app/data/cache/UNRATE_50_asc.parquet",
+            },
+        ]
+        mock_spark_data_service.get_cached_series = MagicMock(
+            return_value=mock_cache_entries
+        )
+
+        # Make request
+        response = await async_client.get("/api/spark/cache/list")
+
+        # Assertions
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["total_count"] == 2
+        assert len(data["entries"]) == 2
+        assert data["entries"][0]["series_id"] == "GDP"
+        assert data["entries"][1]["series_id"] == "UNRATE"
+
+    @pytest.mark.asyncio
+    async def test_clear_all_cache_success(
+        self,
+        async_client,
+        mock_spark_service,
+        mock_fred_service,
+        mock_spark_data_service,
+    ):
+        """Test successful clearing of all cache."""
+        # Setup mocks
+        mock_spark_service.is_available.return_value = True
+        mock_spark_data_service.clear_cache = MagicMock(return_value=5)
+
+        # Make request
+        response = await async_client.delete("/api/spark/cache/clear")
+
+        # Assertions
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["deleted_count"] == 5
+        assert data["series_id"] == "all"
+        mock_spark_data_service.clear_cache.assert_called_once_with(series_id=None)
+
+    @pytest.mark.asyncio
+    async def test_clear_specific_series_cache_success(
+        self,
+        async_client,
+        mock_spark_service,
+        mock_fred_service,
+        mock_spark_data_service,
+    ):
+        """Test successful clearing of specific series cache."""
+        # Setup mocks
+        mock_spark_service.is_available.return_value = True
+        mock_spark_data_service.clear_cache = MagicMock(return_value=2)
+
+        # Make request
+        response = await async_client.delete("/api/spark/cache/clear?series_id=GDP")
+
+        # Assertions
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["deleted_count"] == 2
+        assert data["series_id"] == "GDP"
+        mock_spark_data_service.clear_cache.assert_called_once_with(series_id="GDP")
+
+    @pytest.mark.asyncio
+    async def test_clear_series_cache_by_path_success(
+        self,
+        async_client,
+        mock_spark_service,
+        mock_fred_service,
+        mock_spark_data_service,
+    ):
+        """Test successful clearing of series cache using path parameter."""
+        # Setup mocks
+        mock_spark_service.is_available.return_value = True
+        mock_spark_data_service.clear_cache = MagicMock(return_value=2)
+
+        # Make request
+        response = await async_client.delete("/api/spark/cache/UNRATE")
+
+        # Assertions
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["deleted_count"] == 2
+        assert data["series_id"] == "UNRATE"
+        assert "UNRATE" in data["message"]
+        mock_spark_data_service.clear_cache.assert_called_once_with(series_id="UNRATE")
+
+    @pytest.mark.asyncio
+    async def test_batch_fetch_with_cache(
+        self,
+        async_client,
+        mock_spark_service,
+        mock_fred_service,
+        mock_spark_data_service,
+    ):
+        """Test batch fetch with caching enabled."""
+        from app.models.schemas import FREDDataResponse, FREDSeriesInfo, FREDObservation
+
+        # Setup mock responses
+        mock_responses = [
+            FREDDataResponse(
+                series_id="GDP",
+                series_info=FREDSeriesInfo(
+                    id="GDP",
+                    title="Gross Domestic Product",
+                    units="Billions of Dollars",
+                    frequency="Quarterly",
+                    seasonal_adjustment=None,
+                ),
+                observations=[
+                    FREDObservation(date="2024-01-01", value=25000.0),
+                ],
+                observation_count=1,
+            ),
+        ]
+
+        # Setup mocks
+        mock_spark_service.is_available.return_value = True
+        # Mock cache check - first call returns False (not cached), second returns True (cached)
+        mock_spark_data_service.is_cached = MagicMock(return_value=False)
+        mock_spark_data_service.batch_fetch_series = AsyncMock(
+            return_value=mock_responses
+        )
+        mock_spark_data_service.convert_to_dataframe = MagicMock(
+            return_value=MagicMock()
+        )
+        mock_spark_data_service.aggregate_series_data = MagicMock(
+            return_value=MagicMock()
+        )
+        mock_spark_data_service.dataframe_to_dict = MagicMock(
+            return_value={
+                "columns": ["series_id", "date", "value"],
+                "data": [{"series_id": "GDP", "date": "2024-01-01", "value": 25000.0}],
+                "row_count": 1,
+            }
+        )
+
+        # Make request with use_cache=True
+        response = await async_client.post(
+            "/api/spark/batch-fetch",
+            json={
+                "series_ids": ["GDP"],
+                "limit": 10,
+                "sort_order": "desc",
+                "use_cache": True,
+            },
+        )
+
+        # Assertions
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["series_count"] == 1
+        # Verify use_cache was passed
+        call_args = mock_spark_data_service.batch_fetch_series.call_args
+        assert call_args.kwargs["use_cache"] is True
+
+    @pytest.mark.asyncio
+    async def test_batch_fetch_without_cache(
+        self,
+        async_client,
+        mock_spark_service,
+        mock_fred_service,
+        mock_spark_data_service,
+    ):
+        """Test batch fetch with caching disabled."""
+        from app.models.schemas import FREDDataResponse, FREDSeriesInfo, FREDObservation
+
+        # Setup mock responses
+        mock_responses = [
+            FREDDataResponse(
+                series_id="GDP",
+                series_info=FREDSeriesInfo(
+                    id="GDP",
+                    title="Gross Domestic Product",
+                    units="Billions of Dollars",
+                    frequency="Quarterly",
+                    seasonal_adjustment=None,
+                ),
+                observations=[
+                    FREDObservation(date="2024-01-01", value=25000.0),
+                ],
+                observation_count=1,
+            ),
+        ]
+
+        # Setup mocks
+        mock_spark_service.is_available.return_value = True
+        mock_spark_data_service.batch_fetch_series = AsyncMock(
+            return_value=mock_responses
+        )
+        mock_spark_data_service.convert_to_dataframe = MagicMock(
+            return_value=MagicMock()
+        )
+        mock_spark_data_service.aggregate_series_data = MagicMock(
+            return_value=MagicMock()
+        )
+        mock_spark_data_service.dataframe_to_dict = MagicMock(
+            return_value={
+                "columns": ["series_id", "date", "value"],
+                "data": [{"series_id": "GDP", "date": "2024-01-01", "value": 25000.0}],
+                "row_count": 1,
+            }
+        )
+
+        # Make request with use_cache=False
+        response = await async_client.post(
+            "/api/spark/batch-fetch",
+            json={
+                "series_ids": ["GDP"],
+                "limit": 10,
+                "sort_order": "desc",
+                "use_cache": False,
+            },
+        )
+
+        # Assertions
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["series_count"] == 1
+        # Verify use_cache was passed
+        call_args = mock_spark_data_service.batch_fetch_series.call_args
+        assert call_args.kwargs["use_cache"] is False

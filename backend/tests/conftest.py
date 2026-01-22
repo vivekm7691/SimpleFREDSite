@@ -162,5 +162,23 @@ def mock_spark_data_service(monkeypatch):
         def dataframe_to_dict(self, *args, **kwargs):
             return self._mock_service.dataframe_to_dict(*args, **kwargs)
 
+        def is_cached(self, *args, **kwargs):
+            return self._mock_service.is_cached(*args, **kwargs)
+
+        def save_to_cache(self, *args, **kwargs):
+            return self._mock_service.save_to_cache(*args, **kwargs)
+
+        def load_from_cache(self, *args, **kwargs):
+            return self._mock_service.load_from_cache(*args, **kwargs)
+
+        def get_cached_series(self, *args, **kwargs):
+            return self._mock_service.get_cached_series(*args, **kwargs)
+
+        def get_cache_stats(self, *args, **kwargs):
+            return self._mock_service.get_cache_stats(*args, **kwargs)
+
+        def clear_cache(self, *args, **kwargs):
+            return self._mock_service.clear_cache(*args, **kwargs)
+
     monkeypatch.setattr("app.api.routes.SparkDataService", MockSparkDataService)
     return mock_service
