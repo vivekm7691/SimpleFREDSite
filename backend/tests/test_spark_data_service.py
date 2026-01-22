@@ -30,16 +30,23 @@ class TestSparkDataServiceCacheMethods:
         return MagicMock()
 
     @pytest.fixture
-    def spark_data_service(self, mock_spark_service, mock_fred_service, monkeypatch):
+    def spark_data_service(
+        self, mock_spark_service, mock_fred_service, monkeypatch, tmp_path
+    ):
         """Create SparkDataService instance with mocked dependencies."""
-        # Mock the cache directory to use a temporary path
-        with patch.dict(os.environ, {"DATA_DIR": "/tmp/test_data"}):
-            service = SparkDataService(
-                spark_service=mock_spark_service, fred_service=mock_fred_service
-            )
-            # Override cache_dir to use a test directory
-            service.cache_dir = Path("/tmp/test_data/cache")
-            return service
+        # Use temporary directory for cache
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+
+        # Mock the cache directory creation to avoid permission errors
+        with patch.dict(os.environ, {"DATA_DIR": str(tmp_path)}):
+            with patch("pathlib.Path.mkdir"):
+                service = SparkDataService(
+                    spark_service=mock_spark_service, fred_service=mock_fred_service
+                )
+                # Override cache_dir to use the temp directory
+                service.cache_dir = cache_dir
+                return service
 
     def test_get_cache_path(self, spark_data_service):
         """Test getting cache path for a series."""
@@ -147,31 +154,33 @@ class TestSparkDataServiceCacheMethods:
             result = spark_data_service.get_cached_series()
             assert result == []
 
-    def test_get_cached_series_with_entries(self, spark_data_service):
+    def test_get_cached_series_with_entries(self, spark_data_service, tmp_path):
         """Test get_cached_series with cached entries."""
-        # Mock cache directory with entries
-        mock_dir = MagicMock()
-        mock_dir.exists.return_value = True
-        mock_dir.iterdir.return_value = [
-            MagicMock(
-                name="GDP_100_desc.parquet",
-                stem="GDP_100_desc",
-                suffix=".parquet",
-                is_dir=lambda: True,
-                stat=lambda: MagicMock(st_size=1024, st_mtime=1234567890),
-                rglob=lambda pattern: [
-                    MagicMock(is_file=lambda: True, stat=lambda: MagicMock(st_size=512))
-                ],
-            )
-        ]
+        from datetime import datetime
 
-        with patch.object(spark_data_service, "cache_dir", mock_dir):
-            result = spark_data_service.get_cached_series()
+        # Create a mock cache directory structure
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir(parents=True, exist_ok=True)
 
-            assert len(result) == 1
-            assert result[0]["series_id"] == "GDP"
-            assert result[0]["limit"] == 100
-            assert result[0]["sort_order"] == "desc"
+        # Create a mock parquet directory
+        parquet_dir = cache_dir / "GDP_100_desc.parquet"
+        parquet_dir.mkdir()
+
+        # Create a mock file inside the parquet directory
+        mock_file = parquet_dir / "part-00000.parquet"
+        mock_file.write_bytes(b"mock data")
+
+        # Override cache_dir
+        spark_data_service.cache_dir = cache_dir
+
+        result = spark_data_service.get_cached_series()
+
+        assert len(result) == 1
+        assert result[0]["series_id"] == "GDP"
+        assert result[0]["limit"] == 100
+        assert result[0]["sort_order"] == "desc"
+        assert "modified_time" in result[0]
+        assert "file_size" in result[0]
 
     def test_get_cache_stats(self, spark_data_service):
         """Test getting cache statistics."""
@@ -265,14 +274,23 @@ class TestSparkDataServiceBatchFetch:
         return MagicMock()
 
     @pytest.fixture
-    def spark_data_service(self, mock_spark_service, mock_fred_service, monkeypatch):
+    def spark_data_service(
+        self, mock_spark_service, mock_fred_service, monkeypatch, tmp_path
+    ):
         """Create SparkDataService instance with mocked dependencies."""
-        with patch.dict(os.environ, {"DATA_DIR": "/tmp/test_data"}):
-            service = SparkDataService(
-                spark_service=mock_spark_service, fred_service=mock_fred_service
-            )
-            service.cache_dir = Path("/tmp/test_data/cache")
-            return service
+        # Use temporary directory for cache
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+
+        # Mock the cache directory creation to avoid permission errors
+        with patch.dict(os.environ, {"DATA_DIR": str(tmp_path)}):
+            with patch("pathlib.Path.mkdir"):
+                service = SparkDataService(
+                    spark_service=mock_spark_service, fred_service=mock_fred_service
+                )
+                # Override cache_dir to use the temp directory
+                service.cache_dir = cache_dir
+                return service
 
     @pytest.mark.asyncio
     async def test_batch_fetch_with_cache_hit(self, spark_data_service):
@@ -396,11 +414,20 @@ class TestSparkDataServiceDataFrameMethods:
         return MagicMock()
 
     @pytest.fixture
-    def spark_data_service(self, mock_spark_service, mock_fred_service):
+    def spark_data_service(self, mock_spark_service, mock_fred_service, tmp_path):
         """Create SparkDataService instance."""
-        return SparkDataService(
-            spark_service=mock_spark_service, fred_service=mock_fred_service
-        )
+        # Use temporary directory for cache to avoid permission issues
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+
+        with patch.dict(os.environ, {"DATA_DIR": str(tmp_path)}):
+            with patch("app.services.spark_data_service.Path.mkdir"):
+                service = SparkDataService(
+                    spark_service=mock_spark_service, fred_service=mock_fred_service
+                )
+                # Override cache_dir to use the temp directory
+                service.cache_dir = cache_dir
+                return service
 
     def test_convert_to_dataframe(self, spark_data_service, mock_spark_service):
         """Test converting FRED responses to DataFrame."""
