@@ -13,10 +13,13 @@ from app.models.schemas import (
     SummarizeResponse,
     CategoryResponse,
     CategorySeriesResponse,
+    BatchFetchRequest,
+    BatchFetchResponse,
 )
 from app.services.fred_service import get_fred_service
 from app.services.category_service import get_category_service
 from app.services.spark_service import get_spark_service
+from app.services.spark_data_service import SparkDataService
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -232,4 +235,95 @@ async def spark_health_check():
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error checking Spark health: {str(e)}",
+        )
+
+
+@router.post("/spark/batch-fetch", response_model=BatchFetchResponse)
+async def batch_fetch_series(request: BatchFetchRequest):
+    """
+    Batch fetch multiple FRED series and process them using Spark.
+
+    Fetches multiple series in parallel, converts them to Spark DataFrames,
+    and returns combined results.
+
+    Args:
+        request: BatchFetchRequest with list of series IDs and options
+
+    Returns:
+        BatchFetchResponse with combined data from all series
+
+    Raises:
+        HTTPException: If batch processing fails
+    """
+    try:
+        spark_service = get_spark_service()
+        fred_service = get_fred_service()
+
+        # Verify Spark is available
+        if not spark_service.is_available():
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Spark service is not available",
+            )
+
+        # Create Spark data service
+        spark_data_service = SparkDataService(
+            spark_service=spark_service, fred_service=fred_service
+        )
+
+        logger.info(
+            f"Batch fetching {len(request.series_ids)} series: {request.series_ids}"
+        )
+
+        # Fetch all series in parallel
+        fred_responses = await spark_data_service.batch_fetch_series(
+            series_ids=request.series_ids,
+            limit=request.limit,
+            sort_order=request.sort_order,
+        )
+
+        # Convert to DataFrame
+        df = spark_data_service.convert_to_dataframe(fred_responses)
+
+        # Aggregate data
+        aggregated_df = spark_data_service.aggregate_series_data(
+            df, aggregation_type=request.aggregation_type
+        )
+
+        # Convert to dictionary for JSON response
+        data_dict = spark_data_service.dataframe_to_dict(aggregated_df)
+
+        # Prepare series info
+        series_info = []
+        for response in fred_responses:
+            series_info.append(
+                {
+                    "series_id": response.series_id,
+                    "title": response.series_info.title,
+                    "units": response.series_info.units,
+                    "frequency": response.series_info.frequency,
+                    "observation_count": response.observation_count,
+                }
+            )
+
+        return BatchFetchResponse(
+            series_count=len(request.series_ids),
+            total_observations=data_dict["row_count"],
+            columns=data_dict["columns"],
+            data=data_dict["data"],
+            series_info=series_info,
+        )
+
+    except ValueError as e:
+        logger.error(f"ValueError in batch_fetch_series: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            f"Error in batch_fetch_series: {type(e).__name__}: {str(e)}", exc_info=True
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error processing batch fetch: {str(e)}",
         )
