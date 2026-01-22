@@ -15,6 +15,8 @@ from app.models.schemas import (
     CategorySeriesResponse,
     BatchFetchRequest,
     BatchFetchResponse,
+    CacheStatsResponse,
+    CacheListResponse,
 )
 from app.services.fred_service import get_fred_service
 from app.services.category_service import get_category_service
@@ -275,11 +277,12 @@ async def batch_fetch_series(request: BatchFetchRequest):
             f"Batch fetching {len(request.series_ids)} series: {request.series_ids}"
         )
 
-        # Fetch all series in parallel
+        # Fetch all series in parallel (with caching if enabled)
         fred_responses = await spark_data_service.batch_fetch_series(
             series_ids=request.series_ids,
             limit=request.limit,
             sort_order=request.sort_order,
+            use_cache=request.use_cache,
         )
 
         # Convert to DataFrame
@@ -326,4 +329,191 @@ async def batch_fetch_series(request: BatchFetchRequest):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error processing batch fetch: {str(e)}",
+        )
+
+
+@router.get("/spark/cache/stats", response_model=CacheStatsResponse)
+async def get_cache_stats():
+    """
+    Get cache statistics.
+
+    Returns:
+        CacheStatsResponse with cache statistics
+
+    Raises:
+        HTTPException: If cache stats cannot be retrieved
+    """
+    try:
+        spark_service = get_spark_service()
+        fred_service = get_fred_service()
+
+        # Verify Spark is available
+        if not spark_service.is_available():
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Spark service is not available",
+            )
+
+        # Create Spark data service
+        spark_data_service = SparkDataService(
+            spark_service=spark_service, fred_service=fred_service
+        )
+
+        stats = spark_data_service.get_cache_stats()
+
+        return CacheStatsResponse(**stats)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting cache stats: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error getting cache stats: {str(e)}",
+        )
+
+
+@router.get("/spark/cache/list", response_model=CacheListResponse)
+async def list_cached_series():
+    """
+    List all cached series.
+
+    Returns:
+        CacheListResponse with list of cached series
+
+    Raises:
+        HTTPException: If cache list cannot be retrieved
+    """
+    try:
+        spark_service = get_spark_service()
+        fred_service = get_fred_service()
+
+        # Verify Spark is available
+        if not spark_service.is_available():
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Spark service is not available",
+            )
+
+        # Create Spark data service
+        spark_data_service = SparkDataService(
+            spark_service=spark_service, fred_service=fred_service
+        )
+
+        cached_series = spark_data_service.get_cached_series()
+
+        return CacheListResponse(entries=cached_series, total_count=len(cached_series))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error listing cached series: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error listing cached series: {str(e)}",
+        )
+
+
+@router.delete("/spark/cache/clear")
+async def clear_cache(
+    series_id: Optional[str] = Query(
+        None, description="Series ID to clear (optional, clears all if not provided)"
+    )
+):
+    """
+    Clear cache for a specific series or all cached data.
+
+    Args:
+        series_id: Optional series ID to clear. If not provided, clears all cache.
+
+    Returns:
+        JSON response with number of files deleted
+
+    Raises:
+        HTTPException: If cache cannot be cleared
+    """
+    try:
+        spark_service = get_spark_service()
+        fred_service = get_fred_service()
+
+        # Verify Spark is available
+        if not spark_service.is_available():
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Spark service is not available",
+            )
+
+        # Create Spark data service
+        spark_data_service = SparkDataService(
+            spark_service=spark_service, fred_service=fred_service
+        )
+
+        # Normalize series_id if provided
+        if series_id:
+            series_id = series_id.strip().upper()
+
+        deleted_count = spark_data_service.clear_cache(series_id=series_id)
+
+        return {
+            "message": f"Cleared {deleted_count} cache file(s)",
+            "deleted_count": deleted_count,
+            "series_id": series_id if series_id else "all",
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error clearing cache: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error clearing cache: {str(e)}",
+        )
+
+
+@router.delete("/spark/cache/{series_id}")
+async def clear_series_cache(series_id: str):
+    """
+    Clear cache for a specific series.
+
+    Args:
+        series_id: Series ID to clear from cache
+
+    Returns:
+        JSON response with number of files deleted
+
+    Raises:
+        HTTPException: If cache cannot be cleared
+    """
+    try:
+        spark_service = get_spark_service()
+        fred_service = get_fred_service()
+
+        # Verify Spark is available
+        if not spark_service.is_available():
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Spark service is not available",
+            )
+
+        # Create Spark data service
+        spark_data_service = SparkDataService(
+            spark_service=spark_service, fred_service=fred_service
+        )
+
+        # Normalize series_id
+        series_id = series_id.strip().upper()
+
+        deleted_count = spark_data_service.clear_cache(series_id=series_id)
+
+        return {
+            "message": f"Cleared {deleted_count} cache file(s) for series '{series_id}'",
+            "deleted_count": deleted_count,
+            "series_id": series_id,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            f"Error clearing cache for series '{series_id}': {str(e)}", exc_info=True
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error clearing cache for series '{series_id}': {str(e)}",
         )

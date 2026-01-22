@@ -127,6 +127,9 @@ class BatchFetchRequest(BaseModel):
         default="union",
         description="Type of aggregation to perform",
     )
+    use_cache: bool = Field(
+        default=True, description="Whether to use cached data if available"
+    )
 
     @field_validator("series_ids")
     @classmethod
@@ -157,3 +160,30 @@ class BatchFetchResponse(BaseModel):
     series_info: List[dict] = Field(
         ..., description="Metadata for each series processed"
     )
+
+
+class CacheStatsResponse(BaseModel):
+    """Response model for cache statistics."""
+
+    total_files: int = Field(..., description="Total number of cache files")
+    unique_series: int = Field(..., description="Number of unique series cached")
+    total_size_bytes: int = Field(..., description="Total cache size in bytes")
+    total_size_mb: float = Field(..., description="Total cache size in MB")
+
+
+class CacheEntry(BaseModel):
+    """Model for a single cache entry."""
+
+    series_id: str = Field(..., description="FRED series ID")
+    limit: int = Field(..., description="Maximum observations")
+    sort_order: str = Field(..., description="Sort order")
+    file_size: int = Field(..., description="Cache file size in bytes")
+    modified_time: str = Field(..., description="Last modification time (ISO format)")
+    cache_path: str = Field(..., description="Path to cache file")
+
+
+class CacheListResponse(BaseModel):
+    """Response model for cache list."""
+
+    entries: List[CacheEntry] = Field(..., description="List of cache entries")
+    total_count: int = Field(..., description="Total number of cache entries")
