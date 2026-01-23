@@ -585,7 +585,9 @@ class SparkDataService:
                 {
                     "series_id": row["series_id"],
                     "mean": float(row["mean"]) if row["mean"] is not None else None,
-                    "median": float(row["median"]) if row["median"] is not None else None,
+                    "median": (
+                        float(row["median"]) if row["median"] is not None else None
+                    ),
                     "std": float(row["std"]) if row["std"] is not None else None,
                     "min": float(row["min"]) if row["min"] is not None else None,
                     "max": float(row["max"]) if row["max"] is not None else None,
@@ -619,7 +621,9 @@ class SparkDataService:
         results = []
 
         # Get unique series IDs
-        series_ids = [row["series_id"] for row in df.select("series_id").distinct().collect()]
+        series_ids = [
+            row["series_id"] for row in df.select("series_id").distinct().collect()
+        ]
 
         for series_id in series_ids:
             # Filter for this series
@@ -638,7 +642,8 @@ class SparkDataService:
                     (col("previous_value").isNotNull())
                     & (col("previous_value") != 0)
                     & (col("value").isNotNull()),
-                    ((col("value") - col("previous_value")) / col("previous_value")) * 100,
+                    ((col("value") - col("previous_value")) / col("previous_value"))
+                    * 100,
                 ).otherwise(None),
             )
 
@@ -649,8 +654,12 @@ class SparkDataService:
                 results.append(
                     {
                         "series_id": row["series_id"],
-                        "date": row["date"].strftime("%Y-%m-%d") if row["date"] else None,
-                        "value": float(row["value"]) if row["value"] is not None else None,
+                        "date": (
+                            row["date"].strftime("%Y-%m-%d") if row["date"] else None
+                        ),
+                        "value": (
+                            float(row["value"]) if row["value"] is not None else None
+                        ),
                         "previous_value": (
                             float(row["previous_value"])
                             if row["previous_value"] is not None
@@ -695,7 +704,10 @@ class SparkDataService:
                         (col("prev_year_value").isNotNull())
                         & (col("prev_year_value") != 0)
                         & (col("current.value").isNotNull()),
-                        ((col("current.value") - col("prev_year_value")) / col("prev_year_value"))
+                        (
+                            (col("current.value") - col("prev_year_value"))
+                            / col("prev_year_value")
+                        )
                         * 100,
                     ).otherwise(None),
                 )
@@ -712,8 +724,16 @@ class SparkDataService:
                         results.append(
                             {
                                 "series_id": row["series_id"],
-                                "date": row["date"].strftime("%Y-%m-%d") if row["date"] else None,
-                                "value": float(row["value"]) if row["value"] is not None else None,
+                                "date": (
+                                    row["date"].strftime("%Y-%m-%d")
+                                    if row["date"]
+                                    else None
+                                ),
+                                "value": (
+                                    float(row["value"])
+                                    if row["value"] is not None
+                                    else None
+                                ),
                                 "previous_value": (
                                     float(row["previous_value"])
                                     if row["previous_value"] is not None
@@ -744,7 +764,9 @@ class SparkDataService:
             df = self._prepare_dataframe_for_analytics(df)
 
         # Get unique series IDs
-        series_ids = [row["series_id"] for row in df.select("series_id").distinct().collect()]
+        series_ids = [
+            row["series_id"] for row in df.select("series_id").distinct().collect()
+        ]
 
         if len(series_ids) < 2:
             return []  # Need at least 2 series for correlation
@@ -761,7 +783,9 @@ class SparkDataService:
                 try:
                     # Calculate correlation
                     corr_value = pivoted_df.select(
-                        expr(f"corr(`{series_id_1}`, `{series_id_2}`)").alias("correlation")
+                        expr(f"corr(`{series_id_1}`, `{series_id_2}`)").alias(
+                            "correlation"
+                        )
                     ).collect()[0]["correlation"]
 
                     if corr_value is not None and not isnan(corr_value):
@@ -803,7 +827,9 @@ class SparkDataService:
         results = []
 
         # Get unique series IDs
-        series_ids = [row["series_id"] for row in df.select("series_id").distinct().collect()]
+        series_ids = [
+            row["series_id"] for row in df.select("series_id").distinct().collect()
+        ]
 
         for series_id in series_ids:
             # Filter for this series
@@ -846,7 +872,9 @@ class SparkDataService:
                     when(col("row_num") <= window_size, col("sma")).otherwise(
                         alpha * col("value")
                         + (1 - alpha)
-                        * lag(col("sma"), 1).over(Window.partitionBy("series_id").orderBy("date"))
+                        * lag(col("sma"), 1).over(
+                            Window.partitionBy("series_id").orderBy("date")
+                        )
                     ),
                 )
 
@@ -862,8 +890,12 @@ class SparkDataService:
                 results.append(
                     {
                         "series_id": row["series_id"],
-                        "date": row["date"].strftime("%Y-%m-%d") if row["date"] else None,
-                        "value": float(row["value"]) if row["value"] is not None else None,
+                        "date": (
+                            row["date"].strftime("%Y-%m-%d") if row["date"] else None
+                        ),
+                        "value": (
+                            float(row["value"]) if row["value"] is not None else None
+                        ),
                         "moving_average": (
                             float(row["moving_average"])
                             if row["moving_average"] is not None
@@ -945,14 +977,18 @@ class SparkDataService:
                 "period_str", expr("date_format(period, 'yyyy-MM-dd')")
             )  # Week start date
         elif period == "monthly":
-            df_agg = df_agg.withColumn("period_str", expr("date_format(period, 'yyyy-MM')"))
+            df_agg = df_agg.withColumn(
+                "period_str", expr("date_format(period, 'yyyy-MM')")
+            )
         elif period == "quarterly":
             df_agg = df_agg.withColumn(
                 "period_str",
                 expr("CONCAT(YEAR(period), '-Q', QUARTER(period))"),
             )
         elif period == "yearly":
-            df_agg = df_agg.withColumn("period_str", expr("date_format(period, 'yyyy')"))
+            df_agg = df_agg.withColumn(
+                "period_str", expr("date_format(period, 'yyyy')")
+            )
 
         # Convert to list of dictionaries
         results = []

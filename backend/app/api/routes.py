@@ -616,7 +616,9 @@ async def perform_analytics(request: AnalyticsRequest):
 
         if "growth_rates" in request.analytics_types:
             logger.info("Calculating growth rates")
-            growth_rates = spark_data_service.calculate_growth_rates(df, include_yoy=True)
+            growth_rates = spark_data_service.calculate_growth_rates(
+                df, include_yoy=True
+            )
 
         if "correlations" in request.analytics_types:
             logger.info("Calculating correlations")
@@ -627,7 +629,9 @@ async def perform_analytics(request: AnalyticsRequest):
                 f"Calculating {request.moving_average_type} moving averages with window {request.moving_average_window}"
             )
             moving_averages = spark_data_service.calculate_moving_averages(
-                df, window_size=request.moving_average_window, ma_type=request.moving_average_type
+                df,
+                window_size=request.moving_average_window,
+                ma_type=request.moving_average_type,
             )
 
         if "time_aggregations" in request.analytics_types:

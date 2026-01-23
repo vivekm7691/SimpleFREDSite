@@ -6,6 +6,7 @@ import pytest
 from fastapi import status
 from unittest.mock import AsyncMock, MagicMock
 from httpx import HTTPStatusError, Response
+from pyspark.sql.types import StringType
 
 from app.models.schemas import FREDDataResponse, FREDSeriesInfo, FREDObservation
 
@@ -1043,8 +1044,14 @@ class TestAnalyticsEndpoint:
 
         # Setup mocks
         mock_spark_service.is_available.return_value = True
-        mock_spark_data_service.batch_fetch_series = AsyncMock(return_value=mock_responses)
+        mock_spark_data_service.batch_fetch_series = AsyncMock(
+            return_value=mock_responses
+        )
         mock_df = MagicMock()
+        # Mock schema to avoid AttributeError when accessing df.schema["date"]
+        mock_schema = MagicMock()
+        mock_schema.__getitem__.return_value.dataType = StringType()
+        mock_df.schema = mock_schema
         mock_spark_data_service.convert_to_dataframe.return_value = mock_df
         mock_spark_data_service._prepare_dataframe_for_analytics.return_value = mock_df
         mock_spark_data_service.calculate_statistics.return_value = [
@@ -1105,13 +1112,16 @@ class TestAnalyticsEndpoint:
         ]
 
         mock_spark_service.is_available.return_value = True
-        mock_spark_data_service.batch_fetch_series = AsyncMock(return_value=mock_responses)
+        mock_spark_data_service.batch_fetch_series = AsyncMock(
+            return_value=mock_responses
+        )
         mock_df = MagicMock()
+        # Mock schema to avoid AttributeError when accessing df.schema["date"]
+        mock_schema = MagicMock()
+        mock_schema.__getitem__.return_value.dataType = StringType()
+        mock_df.schema = mock_schema
         mock_spark_data_service.convert_to_dataframe.return_value = mock_df
-        if not hasattr(mock_spark_data_service, '_prepare_dataframe_for_analytics'):
-            mock_spark_data_service._prepare_dataframe_for_analytics = MagicMock(return_value=mock_df)
-        else:
-            mock_spark_data_service._prepare_dataframe_for_analytics.return_value = mock_df
+        mock_spark_data_service._prepare_dataframe_for_analytics.return_value = mock_df
         mock_spark_data_service.calculate_growth_rates.return_value = [
             {
                 "series_id": "GDP",
@@ -1175,8 +1185,14 @@ class TestAnalyticsEndpoint:
         ]
 
         mock_spark_service.is_available.return_value = True
-        mock_spark_data_service.batch_fetch_series = AsyncMock(return_value=mock_responses)
+        mock_spark_data_service.batch_fetch_series = AsyncMock(
+            return_value=mock_responses
+        )
         mock_df = MagicMock()
+        # Mock schema to avoid AttributeError when accessing df.schema["date"]
+        mock_schema = MagicMock()
+        mock_schema.__getitem__.return_value.dataType = StringType()
+        mock_df.schema = mock_schema
         mock_spark_data_service.convert_to_dataframe.return_value = mock_df
         mock_spark_data_service._prepare_dataframe_for_analytics.return_value = mock_df
         mock_spark_data_service.calculate_correlations.return_value = [
@@ -1228,8 +1244,14 @@ class TestAnalyticsEndpoint:
         ]
 
         mock_spark_service.is_available.return_value = True
-        mock_spark_data_service.batch_fetch_series = AsyncMock(return_value=mock_responses)
+        mock_spark_data_service.batch_fetch_series = AsyncMock(
+            return_value=mock_responses
+        )
         mock_df = MagicMock()
+        # Mock schema to avoid AttributeError when accessing df.schema["date"]
+        mock_schema = MagicMock()
+        mock_schema.__getitem__.return_value.dataType = StringType()
+        mock_df.schema = mock_schema
         mock_spark_data_service.convert_to_dataframe.return_value = mock_df
         mock_spark_data_service._prepare_dataframe_for_analytics.return_value = mock_df
         mock_spark_data_service.calculate_moving_averages.return_value = [
@@ -1285,8 +1307,14 @@ class TestAnalyticsEndpoint:
         ]
 
         mock_spark_service.is_available.return_value = True
-        mock_spark_data_service.batch_fetch_series = AsyncMock(return_value=mock_responses)
+        mock_spark_data_service.batch_fetch_series = AsyncMock(
+            return_value=mock_responses
+        )
         mock_df = MagicMock()
+        # Mock schema to avoid AttributeError when accessing df.schema["date"]
+        mock_schema = MagicMock()
+        mock_schema.__getitem__.return_value.dataType = StringType()
+        mock_df.schema = mock_schema
         mock_spark_data_service.convert_to_dataframe.return_value = mock_df
         mock_spark_data_service._prepare_dataframe_for_analytics.return_value = mock_df
         mock_spark_data_service.calculate_time_aggregations.return_value = [
@@ -1407,8 +1435,14 @@ class TestAnalyticsEndpoint:
         ]
 
         mock_spark_service.is_available.return_value = True
-        mock_spark_data_service.batch_fetch_series = AsyncMock(return_value=mock_responses)
+        mock_spark_data_service.batch_fetch_series = AsyncMock(
+            return_value=mock_responses
+        )
         mock_df = MagicMock()
+        # Mock schema to avoid AttributeError when accessing df.schema["date"]
+        mock_schema = MagicMock()
+        mock_schema.__getitem__.return_value.dataType = StringType()
+        mock_df.schema = mock_schema
         mock_spark_data_service.convert_to_dataframe.return_value = mock_df
         mock_spark_data_service._prepare_dataframe_for_analytics.return_value = mock_df
         mock_spark_data_service.calculate_statistics.return_value = [

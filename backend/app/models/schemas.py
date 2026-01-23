@@ -238,10 +238,13 @@ class TimeAggregation(BaseModel):
     """Model for time-based aggregation data."""
 
     series_id: str = Field(..., description="FRED series ID")
-    period: str = Field(..., description="Time period (e.g., '2024-01', '2024-Q1', '2024')")
+    period: str = Field(
+        ..., description="Time period (e.g., '2024-01', '2024-Q1', '2024')"
+    )
     aggregated_value: Optional[float] = Field(None, description="Aggregated value")
     aggregation_function: str = Field(
-        ..., description="Aggregation function used: 'mean', 'sum', 'min', 'max', 'first', 'last'"
+        ...,
+        description="Aggregation function used: 'mean', 'sum', 'min', 'max', 'first', 'last'",
     )
     observation_count: int = Field(..., description="Number of observations in period")
 
@@ -270,10 +273,15 @@ class AnalyticsRequest(BaseModel):
         default=True, description="Whether to use cached data if available"
     )
     moving_average_window: Optional[int] = Field(
-        None, ge=2, le=365, description="Window size for moving averages (required if 'moving_averages' in analytics_types)"
+        None,
+        ge=2,
+        le=365,
+        description="Window size for moving averages (required if 'moving_averages' in analytics_types)",
     )
     moving_average_type: Optional[str] = Field(
-        None, pattern="^(sma|ema)$", description="Type of moving average: 'sma' or 'ema' (required if 'moving_averages' in analytics_types)"
+        None,
+        pattern="^(sma|ema)$",
+        description="Type of moving average: 'sma' or 'ema' (required if 'moving_averages' in analytics_types)",
     )
     time_aggregation_period: Optional[str] = Field(
         None,
