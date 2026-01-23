@@ -17,6 +17,8 @@ from app.models.schemas import (
     BatchFetchResponse,
     CacheStatsResponse,
     CacheListResponse,
+    AnalyticsRequest,
+    AnalyticsResponse,
 )
 from app.services.fred_service import get_fred_service
 from app.services.category_service import get_category_service
@@ -516,4 +518,147 @@ async def clear_series_cache(series_id: str):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error clearing cache for series '{series_id}': {str(e)}",
+        )
+
+
+@router.post("/spark/analytics", response_model=AnalyticsResponse)
+async def perform_analytics(request: AnalyticsRequest):
+    """
+    Perform analytics on FRED series data.
+
+    Supports:
+    - Basic statistics (mean, median, std, min, max, count, sum)
+    - Growth rates (period-over-period, year-over-year)
+    - Correlations between series
+    - Moving averages (simple and exponential)
+    - Time-based aggregations (daily, weekly, monthly, quarterly, yearly)
+
+    Args:
+        request: AnalyticsRequest with series IDs, analytics types, and options
+
+    Returns:
+        AnalyticsResponse with requested analytics results
+
+    Raises:
+        HTTPException: If analytics processing fails
+    """
+    try:
+        spark_service = get_spark_service()
+        fred_service = get_fred_service()
+
+        # Verify Spark is available
+        if not spark_service.is_available():
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Spark service is not available",
+            )
+
+        # Create Spark data service
+        spark_data_service = SparkDataService(
+            spark_service=spark_service, fred_service=fred_service
+        )
+
+        logger.info(
+            f"Performing analytics on {len(request.series_ids)} series: {request.series_ids}"
+        )
+        logger.info(f"Analytics types requested: {request.analytics_types}")
+
+        # Validate required parameters for specific analytics types
+        if "moving_averages" in request.analytics_types:
+            if request.moving_average_window is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="moving_average_window is required when 'moving_averages' is requested",
+                )
+            if request.moving_average_type is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="moving_average_type is required when 'moving_averages' is requested",
+                )
+
+        if "time_aggregations" in request.analytics_types:
+            if request.time_aggregation_period is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="time_aggregation_period is required when 'time_aggregations' is requested",
+                )
+            if request.time_aggregation_function is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="time_aggregation_function is required when 'time_aggregations' is requested",
+                )
+
+        # Fetch all series in parallel (with caching if enabled)
+        fred_responses = await spark_data_service.batch_fetch_series(
+            series_ids=request.series_ids,
+            limit=request.limit,
+            sort_order=request.sort_order,
+            use_cache=request.use_cache,
+        )
+
+        # Convert to DataFrame
+        df = spark_data_service.convert_to_dataframe(fred_responses)
+
+        # Prepare DataFrame for analytics (convert dates, sort)
+        df = spark_data_service._prepare_dataframe_for_analytics(df)
+
+        # Initialize response data
+        statistics = None
+        growth_rates = None
+        correlations = None
+        moving_averages = None
+        time_aggregations = None
+
+        # Perform requested analytics
+        if "statistics" in request.analytics_types:
+            logger.info("Calculating statistics")
+            statistics = spark_data_service.calculate_statistics(df)
+
+        if "growth_rates" in request.analytics_types:
+            logger.info("Calculating growth rates")
+            growth_rates = spark_data_service.calculate_growth_rates(df, include_yoy=True)
+
+        if "correlations" in request.analytics_types:
+            logger.info("Calculating correlations")
+            correlations = spark_data_service.calculate_correlations(df)
+
+        if "moving_averages" in request.analytics_types:
+            logger.info(
+                f"Calculating {request.moving_average_type} moving averages with window {request.moving_average_window}"
+            )
+            moving_averages = spark_data_service.calculate_moving_averages(
+                df, window_size=request.moving_average_window, ma_type=request.moving_average_type
+            )
+
+        if "time_aggregations" in request.analytics_types:
+            logger.info(
+                f"Calculating time aggregations: {request.time_aggregation_period} with {request.time_aggregation_function}"
+            )
+            time_aggregations = spark_data_service.calculate_time_aggregations(
+                df,
+                period=request.time_aggregation_period,
+                agg_function=request.time_aggregation_function,
+            )
+
+        return AnalyticsResponse(
+            series_count=len(request.series_ids),
+            statistics=statistics,
+            growth_rates=growth_rates,
+            correlations=correlations,
+            moving_averages=moving_averages,
+            time_aggregations=time_aggregations,
+        )
+
+    except ValueError as e:
+        logger.error(f"ValueError in perform_analytics: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            f"Error in perform_analytics: {type(e).__name__}: {str(e)}", exc_info=True
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error performing analytics: {str(e)}",
         )
