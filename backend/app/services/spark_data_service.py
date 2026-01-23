@@ -5,9 +5,10 @@ Spark data service for batch processing FRED series data.
 import logging
 import os
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 import asyncio
 from datetime import datetime
+from math import isnan
 from pyspark.sql import DataFrame
 from pyspark.sql.types import (
     StructType,
@@ -15,6 +16,23 @@ from pyspark.sql.types import (
     StringType,
     DoubleType,
 )
+from pyspark.sql.functions import (
+    to_date,
+    col,
+    avg,
+    stddev,
+    min as spark_min,
+    max as spark_max,
+    count,
+    sum as spark_sum,
+    lag,
+    date_trunc,
+    year,
+    month,
+    when,
+    expr,
+)
+from pyspark.sql.window import Window
 
 from app.models.schemas import FREDDataResponse
 from app.services.fred_service import FREDService
@@ -507,3 +525,488 @@ class SparkDataService:
             "total_size_bytes": total_size,
             "total_size_mb": round(total_size / (1024 * 1024), 2),
         }
+
+    def _prepare_dataframe_for_analytics(self, df: DataFrame) -> DataFrame:
+        """
+        Prepare DataFrame for analytics operations by converting dates and sorting.
+
+        Args:
+            df: Spark DataFrame with date as string
+
+        Returns:
+            DataFrame with date converted to DateType and sorted by date
+        """
+        if df.count() == 0:
+            return df
+
+        # Convert date string to DateType
+        df_prepared = df.withColumn("date_parsed", to_date(col("date"), "yyyy-MM-dd"))
+
+        # Sort by series_id and date for time-series operations
+        df_prepared = df_prepared.orderBy("series_id", "date_parsed")
+
+        # Drop original date column and rename date_parsed to date
+        df_prepared = df_prepared.drop("date").withColumnRenamed("date_parsed", "date")
+
+        return df_prepared
+
+    def calculate_statistics(self, df: DataFrame) -> List[Dict[str, Any]]:
+        """
+        Calculate basic statistics for each series.
+
+        Args:
+            df: Spark DataFrame with series data (must have date converted to DateType)
+
+        Returns:
+            List of dictionaries with statistics per series
+        """
+        if df.count() == 0:
+            return []
+
+        # Prepare DataFrame if dates are strings
+        if df.schema["date"].dataType == StringType():
+            df = self._prepare_dataframe_for_analytics(df)
+
+        # Calculate statistics grouped by series_id
+        stats_df = df.groupBy("series_id").agg(
+            avg("value").alias("mean"),
+            expr("percentile_approx(value, 0.5)").alias("median"),
+            stddev("value").alias("std"),
+            spark_min("value").alias("min"),
+            spark_max("value").alias("max"),
+            count("value").alias("count"),
+            spark_sum("value").alias("sum"),
+        )
+
+        # Convert to list of dictionaries
+        results = []
+        for row in stats_df.collect():
+            results.append(
+                {
+                    "series_id": row["series_id"],
+                    "mean": float(row["mean"]) if row["mean"] is not None else None,
+                    "median": (
+                        float(row["median"]) if row["median"] is not None else None
+                    ),
+                    "std": float(row["std"]) if row["std"] is not None else None,
+                    "min": float(row["min"]) if row["min"] is not None else None,
+                    "max": float(row["max"]) if row["max"] is not None else None,
+                    "count": int(row["count"]),
+                    "sum": float(row["sum"]) if row["sum"] is not None else None,
+                }
+            )
+
+        return results
+
+    def calculate_growth_rates(
+        self, df: DataFrame, include_yoy: bool = True
+    ) -> List[Dict[str, Any]]:
+        """
+        Calculate growth rates (period-over-period and year-over-year).
+
+        Args:
+            df: Spark DataFrame with series data (must have date converted to DateType)
+            include_yoy: Whether to include year-over-year growth rates
+
+        Returns:
+            List of dictionaries with growth rate data
+        """
+        if df.count() == 0:
+            return []
+
+        # Prepare DataFrame if dates are strings
+        if df.schema["date"].dataType == StringType():
+            df = self._prepare_dataframe_for_analytics(df)
+
+        results = []
+
+        # Get unique series IDs
+        series_ids = [
+            row["series_id"] for row in df.select("series_id").distinct().collect()
+        ]
+
+        for series_id in series_ids:
+            # Filter for this series
+            series_df = df.filter(col("series_id") == series_id).orderBy("date")
+
+            # Define window for period-over-period
+            window_spec = Window.partitionBy("series_id").orderBy("date")
+
+            # Calculate period-over-period growth rate
+            series_df = series_df.withColumn(
+                "previous_value", lag("value", 1).over(window_spec)
+            )
+            series_df = series_df.withColumn(
+                "growth_rate",
+                when(
+                    (col("previous_value").isNotNull())
+                    & (col("previous_value") != 0)
+                    & (col("value").isNotNull()),
+                    ((col("value") - col("previous_value")) / col("previous_value"))
+                    * 100,
+                ).otherwise(None),
+            )
+
+            # Collect results for period-over-period
+            for row in series_df.select(
+                "series_id", "date", "value", "previous_value", "growth_rate"
+            ).collect():
+                results.append(
+                    {
+                        "series_id": row["series_id"],
+                        "date": (
+                            row["date"].strftime("%Y-%m-%d") if row["date"] else None
+                        ),
+                        "value": (
+                            float(row["value"]) if row["value"] is not None else None
+                        ),
+                        "previous_value": (
+                            float(row["previous_value"])
+                            if row["previous_value"] is not None
+                            else None
+                        ),
+                        "growth_rate": (
+                            float(row["growth_rate"])
+                            if row["growth_rate"] is not None
+                            else None
+                        ),
+                        "growth_type": "period_over_period",
+                    }
+                )
+
+            # Calculate year-over-year if requested
+            if include_yoy:
+                # Add year column
+                series_df_yoy = series_df.withColumn("year", year("date"))
+
+                # For YoY, we need to compare same month/quarter across years
+                # Join with previous year's data for same month
+                series_df_yoy = series_df_yoy.alias("current").join(
+                    series_df_yoy.alias("prev")
+                    .select(
+                        col("series_id").alias("prev_series_id"),
+                        col("date").alias("prev_date"),
+                        col("value").alias("prev_year_value"),
+                        year("date").alias("prev_year"),
+                        month("date").alias("prev_month"),
+                    )
+                    .filter(col("prev_series_id") == series_id),
+                    (col("current.series_id") == col("prev_series_id"))
+                    & (year(col("current.date")) == year(col("prev_date")) + 1)
+                    & (month(col("current.date")) == col("prev_month")),
+                    "left",
+                )
+
+                # Calculate YoY growth rate
+                series_df_yoy = series_df_yoy.withColumn(
+                    "yoy_growth_rate",
+                    when(
+                        (col("prev_year_value").isNotNull())
+                        & (col("prev_year_value") != 0)
+                        & (col("current.value").isNotNull()),
+                        (
+                            (col("current.value") - col("prev_year_value"))
+                            / col("prev_year_value")
+                        )
+                        * 100,
+                    ).otherwise(None),
+                )
+
+                # Collect YoY results
+                for row in series_df_yoy.select(
+                    col("current.series_id").alias("series_id"),
+                    col("current.date").alias("date"),
+                    col("current.value").alias("value"),
+                    col("prev_year_value").alias("previous_value"),
+                    col("yoy_growth_rate").alias("growth_rate"),
+                ).collect():
+                    if row["growth_rate"] is not None:
+                        results.append(
+                            {
+                                "series_id": row["series_id"],
+                                "date": (
+                                    row["date"].strftime("%Y-%m-%d")
+                                    if row["date"]
+                                    else None
+                                ),
+                                "value": (
+                                    float(row["value"])
+                                    if row["value"] is not None
+                                    else None
+                                ),
+                                "previous_value": (
+                                    float(row["previous_value"])
+                                    if row["previous_value"] is not None
+                                    else None
+                                ),
+                                "growth_rate": float(row["growth_rate"]),
+                                "growth_type": "year_over_year",
+                            }
+                        )
+
+        return results
+
+    def calculate_correlations(self, df: DataFrame) -> List[Dict[str, Any]]:
+        """
+        Calculate correlation matrix between series.
+
+        Args:
+            df: Spark DataFrame with series data (must have date converted to DateType)
+
+        Returns:
+            List of dictionaries with correlation pairs
+        """
+        if df.count() == 0:
+            return []
+
+        # Prepare DataFrame if dates are strings
+        if df.schema["date"].dataType == StringType():
+            df = self._prepare_dataframe_for_analytics(df)
+
+        # Get unique series IDs
+        series_ids = [
+            row["series_id"] for row in df.select("series_id").distinct().collect()
+        ]
+
+        if len(series_ids) < 2:
+            return []  # Need at least 2 series for correlation
+
+        results = []
+
+        # Pivot the DataFrame to have one column per series
+        # First, ensure we have aligned dates (inner join on date)
+        pivoted_df = df.groupBy("date").pivot("series_id").agg(avg("value"))
+
+        # Calculate correlations between all pairs
+        for i, series_id_1 in enumerate(series_ids):
+            for series_id_2 in series_ids[i + 1 :]:
+                try:
+                    # Calculate correlation
+                    corr_value = pivoted_df.select(
+                        expr(f"corr(`{series_id_1}`, `{series_id_2}`)").alias(
+                            "correlation"
+                        )
+                    ).collect()[0]["correlation"]
+
+                    if corr_value is not None and not isnan(corr_value):
+                        results.append(
+                            {
+                                "series_id_1": series_id_1,
+                                "series_id_2": series_id_2,
+                                "correlation": float(corr_value),
+                            }
+                        )
+                except Exception as e:
+                    logger.warning(
+                        f"Error calculating correlation between {series_id_1} and {series_id_2}: {str(e)}"
+                    )
+
+        return results
+
+    def calculate_moving_averages(
+        self, df: DataFrame, window_size: int, ma_type: str = "sma"
+    ) -> List[Dict[str, Any]]:
+        """
+        Calculate moving averages (simple or exponential).
+
+        Args:
+            df: Spark DataFrame with series data (must have date converted to DateType)
+            window_size: Size of the moving average window
+            ma_type: Type of moving average ('sma' for simple, 'ema' for exponential)
+
+        Returns:
+            List of dictionaries with moving average data
+        """
+        if df.count() == 0:
+            return []
+
+        # Prepare DataFrame if dates are strings
+        if df.schema["date"].dataType == StringType():
+            df = self._prepare_dataframe_for_analytics(df)
+
+        results = []
+
+        # Get unique series IDs
+        series_ids = [
+            row["series_id"] for row in df.select("series_id").distinct().collect()
+        ]
+
+        for series_id in series_ids:
+            # Filter for this series
+            series_df = df.filter(col("series_id") == series_id).orderBy("date")
+
+            # Define window specification
+            window_spec = (
+                Window.partitionBy("series_id")
+                .orderBy("date")
+                .rowsBetween(-(window_size - 1), 0)
+            )
+
+            if ma_type == "sma":
+                # Simple Moving Average
+                series_df = series_df.withColumn(
+                    "moving_average", avg("value").over(window_spec)
+                )
+            elif ma_type == "ema":
+                # Exponential Moving Average
+                # EMA calculation in Spark requires iterative approach
+                # For simplicity, we'll use a recursive formula approximation
+                # α = 2 / (window_size + 1)
+                alpha = 2.0 / (window_size + 1)
+
+                # Since Spark doesn't support recursive window functions easily,
+                # we'll use a simpler approximation: weighted average over window
+                # For first window_size rows, use SMA
+                # For subsequent rows, use EMA formula
+                series_df = series_df.withColumn(
+                    "row_num",
+                    expr("row_number() OVER (PARTITION BY series_id ORDER BY date)"),
+                )
+
+                # Calculate SMA first
+                series_df = series_df.withColumn("sma", avg("value").over(window_spec))
+
+                # Calculate EMA: for first window_size rows use SMA, then use EMA formula
+                series_df = series_df.withColumn(
+                    "moving_average",
+                    when(col("row_num") <= window_size, col("sma")).otherwise(
+                        alpha * col("value")
+                        + (1 - alpha)
+                        * lag(col("sma"), 1).over(
+                            Window.partitionBy("series_id").orderBy("date")
+                        )
+                    ),
+                )
+
+                # Drop helper columns
+                series_df = series_df.drop("row_num", "sma")
+            else:
+                raise ValueError(f"Unsupported moving average type: {ma_type}")
+
+            # Collect results
+            for row in series_df.select(
+                "series_id", "date", "value", "moving_average"
+            ).collect():
+                results.append(
+                    {
+                        "series_id": row["series_id"],
+                        "date": (
+                            row["date"].strftime("%Y-%m-%d") if row["date"] else None
+                        ),
+                        "value": (
+                            float(row["value"]) if row["value"] is not None else None
+                        ),
+                        "moving_average": (
+                            float(row["moving_average"])
+                            if row["moving_average"] is not None
+                            else None
+                        ),
+                        "moving_average_type": ma_type,
+                        "window_size": window_size,
+                    }
+                )
+
+        return results
+
+    def calculate_time_aggregations(
+        self, df: DataFrame, period: str, agg_function: str = "mean"
+    ) -> List[Dict[str, Any]]:
+        """
+        Calculate time-based aggregations (daily, weekly, monthly, quarterly, yearly).
+
+        Args:
+            df: Spark DataFrame with series data (must have date converted to DateType)
+            period: Time period ('daily', 'weekly', 'monthly', 'quarterly', 'yearly')
+            agg_function: Aggregation function ('mean', 'sum', 'min', 'max', 'first', 'last')
+
+        Returns:
+            List of dictionaries with aggregated data
+        """
+        if df.count() == 0:
+            return []
+
+        # Prepare DataFrame if dates are strings
+        if df.schema["date"].dataType == StringType():
+            df = self._prepare_dataframe_for_analytics(df)
+
+        # Map period to date_trunc format
+        period_map = {
+            "daily": "day",
+            "weekly": "week",
+            "monthly": "month",
+            "quarterly": "quarter",
+            "yearly": "year",
+        }
+
+        if period not in period_map:
+            raise ValueError(
+                f"Unsupported period: {period}. Must be one of {list(period_map.keys())}"
+            )
+
+        # Map aggregation function
+        agg_map = {
+            "mean": avg("value"),
+            "sum": spark_sum("value"),
+            "min": spark_min("value"),
+            "max": spark_max("value"),
+            "first": expr("first(value)"),
+            "last": expr("last(value)"),
+        }
+
+        if agg_function not in agg_map:
+            raise ValueError(
+                f"Unsupported aggregation function: {agg_function}. Must be one of {list(agg_map.keys())}"
+            )
+
+        # Truncate date to the specified period
+        df_agg = df.withColumn("period", date_trunc(period_map[period], col("date")))
+
+        # Group by series_id and period, then aggregate
+        df_agg = df_agg.groupBy("series_id", "period").agg(
+            agg_map[agg_function].alias("aggregated_value"),
+            count("value").alias("observation_count"),
+        )
+
+        # Format period string based on period type
+        if period == "daily":
+            df_agg = df_agg.withColumn(
+                "period_str", expr("date_format(period, 'yyyy-MM-dd')")
+            )
+        elif period == "weekly":
+            df_agg = df_agg.withColumn(
+                "period_str", expr("date_format(period, 'yyyy-MM-dd')")
+            )  # Week start date
+        elif period == "monthly":
+            df_agg = df_agg.withColumn(
+                "period_str", expr("date_format(period, 'yyyy-MM')")
+            )
+        elif period == "quarterly":
+            df_agg = df_agg.withColumn(
+                "period_str",
+                expr("CONCAT(YEAR(period), '-Q', QUARTER(period))"),
+            )
+        elif period == "yearly":
+            df_agg = df_agg.withColumn(
+                "period_str", expr("date_format(period, 'yyyy')")
+            )
+
+        # Convert to list of dictionaries
+        results = []
+        for row in df_agg.select(
+            "series_id", "period_str", "aggregated_value", "observation_count"
+        ).collect():
+            results.append(
+                {
+                    "series_id": row["series_id"],
+                    "period": row["period_str"],
+                    "aggregated_value": (
+                        float(row["aggregated_value"])
+                        if row["aggregated_value"] is not None
+                        else None
+                    ),
+                    "aggregation_function": agg_function,
+                    "observation_count": int(row["observation_count"]),
+                }
+            )
+
+        return results

@@ -512,3 +512,365 @@ class TestSparkDataServiceDataFrameMethods:
             spark_data_service.aggregate_series_data(
                 mock_df, aggregation_type="invalid"
             )
+
+
+class TestSparkDataServiceAnalytics:
+    """Test cases for analytics methods in SparkDataService."""
+
+    @pytest.fixture
+    def mock_spark_service(self):
+        """Create a mock Spark service."""
+        mock_service = MagicMock()
+        mock_spark = MagicMock()
+        mock_spark.version = "3.5.0"
+        mock_service.spark = mock_spark
+        mock_service.is_available = MagicMock(return_value=True)
+        return mock_service
+
+    @pytest.fixture
+    def mock_fred_service(self):
+        """Create a mock FRED service."""
+        return MagicMock()
+
+    @pytest.fixture
+    def spark_data_service(
+        self, mock_spark_service, mock_fred_service, monkeypatch, tmp_path
+    ):
+        """Create SparkDataService instance with mocked dependencies."""
+        with patch.dict(os.environ, {"DATA_DIR": str(tmp_path)}):
+            with patch("pathlib.Path.mkdir"):
+                service = SparkDataService(
+                    spark_service=mock_spark_service, fred_service=mock_fred_service
+                )
+                return service
+
+    def test_prepare_dataframe_for_analytics(self, spark_data_service, mock_spark_service):
+        """Test preparing DataFrame for analytics."""
+        from pyspark.sql.types import StringType
+
+        # Mock DataFrame with string dates
+        mock_df = MagicMock()
+        mock_df.count.return_value = 2
+        mock_schema = MagicMock()
+        mock_schema.__getitem__.return_value.dataType = StringType()
+        mock_df.schema = mock_schema
+
+        # Mock date conversion operations - chain the return values
+        mock_with_col = MagicMock()
+        mock_df.withColumn.return_value = mock_with_col
+        mock_with_col.orderBy.return_value = mock_with_col
+        mock_with_col.drop.return_value = mock_with_col
+        mock_with_col.withColumnRenamed.return_value = mock_df
+
+        # Mock the Spark functions
+        with patch("app.services.spark_data_service.to_date") as mock_to_date, \
+             patch("app.services.spark_data_service.col") as mock_col:
+            result = spark_data_service._prepare_dataframe_for_analytics(mock_df)
+
+            assert result == mock_df
+            mock_df.withColumn.assert_called()
+
+    def test_calculate_statistics_empty_dataframe(self, spark_data_service):
+        """Test calculating statistics with empty DataFrame."""
+        mock_df = MagicMock()
+        mock_df.count.return_value = 0
+
+        result = spark_data_service.calculate_statistics(mock_df)
+
+        assert result == []
+
+    def test_calculate_statistics_success(self, spark_data_service, mock_spark_service):
+        """Test calculating statistics successfully."""
+        from pyspark.sql.types import DateType
+
+        # Mock DataFrame
+        mock_df = MagicMock()
+        mock_df.count.return_value = 10
+        mock_schema = MagicMock()
+        mock_schema.__getitem__.return_value.dataType = DateType()
+        mock_df.schema = mock_schema
+
+        # Mock aggregation operations
+        mock_grouped = MagicMock()
+        mock_df.groupBy.return_value = mock_grouped
+        mock_agg = MagicMock()
+        mock_grouped.agg.return_value = mock_agg
+
+        # Mock result row
+        mock_row = MagicMock()
+        mock_row.__getitem__.side_effect = lambda key: {
+            "series_id": "GDP",
+            "mean": 25000.0,
+            "median": 25000.0,
+            "std": 100.0,
+            "min": 24800.0,
+            "max": 25200.0,
+            "count": 10,
+            "sum": 250000.0,
+        }[key]
+        mock_agg.collect.return_value = [mock_row]
+
+        # Mock Spark functions to avoid requiring SparkContext
+        with patch("app.services.spark_data_service.avg"), \
+             patch("app.services.spark_data_service.expr"), \
+             patch("app.services.spark_data_service.stddev"), \
+             patch("app.services.spark_data_service.spark_min"), \
+             patch("app.services.spark_data_service.spark_max"), \
+             patch("app.services.spark_data_service.count"), \
+             patch("app.services.spark_data_service.spark_sum"):
+            result = spark_data_service.calculate_statistics(mock_df)
+
+            assert len(result) == 1
+            assert result[0]["series_id"] == "GDP"
+            assert result[0]["mean"] == 25000.0
+            assert result[0]["count"] == 10
+
+    def test_calculate_growth_rates_empty_dataframe(self, spark_data_service):
+        """Test calculating growth rates with empty DataFrame."""
+        mock_df = MagicMock()
+        mock_df.count.return_value = 0
+
+        result = spark_data_service.calculate_growth_rates(mock_df)
+
+        assert result == []
+
+    def test_calculate_correlations_insufficient_series(self, spark_data_service):
+        """Test calculating correlations with less than 2 series."""
+        from pyspark.sql.types import DateType
+
+        mock_df = MagicMock()
+        mock_df.count.return_value = 10
+        mock_schema = MagicMock()
+        mock_schema.__getitem__.return_value.dataType = DateType()
+        mock_df.schema = mock_schema
+
+        # Mock select distinct to return single series
+        mock_distinct = MagicMock()
+        mock_df.select.return_value.distinct.return_value = mock_distinct
+        mock_row = MagicMock()
+        mock_row.__getitem__.return_value = "GDP"
+        mock_distinct.collect.return_value = [mock_row]
+
+        result = spark_data_service.calculate_correlations(mock_df)
+
+        assert result == []
+
+    def test_calculate_moving_averages_sma(self, spark_data_service):
+        """Test calculating simple moving averages."""
+        from pyspark.sql.types import DateType
+
+        mock_df = MagicMock()
+        mock_df.count.return_value = 10
+        mock_schema = MagicMock()
+        mock_schema.__getitem__.return_value.dataType = DateType()
+        mock_df.schema = mock_schema
+
+        # Mock series selection
+        mock_distinct = MagicMock()
+        mock_df.select.return_value.distinct.return_value = mock_distinct
+        mock_row = MagicMock()
+        mock_row.__getitem__.return_value = "GDP"
+        mock_distinct.collect.return_value = [mock_row]
+
+        # Mock filtering and window operations
+        mock_filtered = MagicMock()
+        mock_df.filter.return_value = mock_filtered
+        mock_filtered.orderBy.return_value = mock_filtered
+        mock_filtered.withColumn.return_value = mock_filtered
+
+        # Mock result collection
+        mock_select = MagicMock()
+        mock_filtered.select.return_value = mock_select
+        mock_result_row = MagicMock()
+        mock_result_row.__getitem__.side_effect = lambda key: {
+            "series_id": "GDP",
+            "date": MagicMock(strftime=lambda fmt: "2024-01-01"),
+            "value": 25000.0,
+            "moving_average": 25000.0,
+        }[key]
+        mock_select.collect.return_value = [mock_result_row]
+
+        # Mock Spark functions to avoid requiring SparkContext
+        with patch("app.services.spark_data_service.col"), \
+             patch("app.services.spark_data_service.avg"), \
+             patch("app.services.spark_data_service.Window") as mock_window:
+            mock_window.partitionBy.return_value.orderBy.return_value.rowsBetween.return_value = MagicMock()
+            result = spark_data_service.calculate_moving_averages(mock_df, window_size=7, ma_type="sma")
+
+            assert len(result) == 1
+            assert result[0]["series_id"] == "GDP"
+            assert result[0]["moving_average_type"] == "sma"
+            assert result[0]["window_size"] == 7
+
+    def test_calculate_moving_averages_ema(self, spark_data_service):
+        """Test calculating exponential moving averages."""
+        from pyspark.sql.types import DateType
+
+        mock_df = MagicMock()
+        mock_df.count.return_value = 10
+        mock_schema = MagicMock()
+        mock_schema.__getitem__.return_value.dataType = DateType()
+        mock_df.schema = mock_schema
+
+        # Mock series selection
+        mock_distinct = MagicMock()
+        mock_df.select.return_value.distinct.return_value = mock_distinct
+        mock_row = MagicMock()
+        mock_row.__getitem__.return_value = "GDP"
+        mock_distinct.collect.return_value = [mock_row]
+
+        # Mock filtering and window operations
+        mock_filtered = MagicMock()
+        mock_df.filter.return_value = mock_filtered
+        mock_filtered.orderBy.return_value = mock_filtered
+        mock_filtered.withColumn.return_value = mock_filtered
+        mock_filtered.drop.return_value = mock_filtered
+
+        # Mock result collection
+        mock_select = MagicMock()
+        mock_filtered.select.return_value = mock_select
+        mock_result_row = MagicMock()
+        mock_result_row.__getitem__.side_effect = lambda key: {
+            "series_id": "GDP",
+            "date": MagicMock(strftime=lambda fmt: "2024-01-01"),
+            "value": 25000.0,
+            "moving_average": 25000.0,
+        }[key]
+        mock_select.collect.return_value = [mock_result_row]
+
+        # Mock Spark functions to avoid requiring SparkContext
+        # Need to mock col() to return a comparable object
+        mock_col = MagicMock()
+        mock_col.__le__ = lambda self, other: MagicMock()  # Make it comparable
+        mock_col.__mul__ = lambda self, other: MagicMock()
+        mock_col.__add__ = lambda self, other: MagicMock()
+        
+        with patch("app.services.spark_data_service.col", return_value=mock_col), \
+             patch("app.services.spark_data_service.avg", return_value=MagicMock()), \
+             patch("app.services.spark_data_service.expr", return_value=MagicMock()), \
+             patch("app.services.spark_data_service.when", return_value=MagicMock()), \
+             patch("app.services.spark_data_service.lag", return_value=MagicMock()), \
+             patch("app.services.spark_data_service.Window") as mock_window:
+            mock_window_spec = MagicMock()
+            mock_window.partitionBy.return_value.orderBy.return_value.rowsBetween.return_value = mock_window_spec
+            result = spark_data_service.calculate_moving_averages(mock_df, window_size=7, ma_type="ema")
+
+            assert len(result) == 1
+            assert result[0]["moving_average_type"] == "ema"
+
+    def test_calculate_moving_averages_invalid_type(self, spark_data_service):
+        """Test calculating moving averages with invalid type raises error."""
+        from pyspark.sql.types import DateType
+
+        mock_df = MagicMock()
+        mock_df.count.return_value = 10
+        mock_schema = MagicMock()
+        mock_schema.__getitem__.return_value.dataType = DateType()
+        mock_df.schema = mock_schema
+
+        mock_distinct = MagicMock()
+        mock_df.select.return_value.distinct.return_value = mock_distinct
+        mock_row = MagicMock()
+        mock_row.__getitem__.return_value = "GDP"
+        mock_distinct.collect.return_value = [mock_row]
+
+        mock_filtered = MagicMock()
+        mock_df.filter.return_value = mock_filtered
+        mock_filtered.orderBy.return_value = mock_filtered
+        mock_filtered.withColumn.return_value = mock_filtered
+
+        # Mock Spark functions to avoid requiring SparkContext
+        with patch("app.services.spark_data_service.col"), \
+             patch("app.services.spark_data_service.avg"), \
+             patch("app.services.spark_data_service.Window") as mock_window:
+            mock_window.partitionBy.return_value.orderBy.return_value.rowsBetween.return_value = MagicMock()
+            with pytest.raises(ValueError, match="Unsupported moving average type"):
+                spark_data_service.calculate_moving_averages(mock_df, window_size=7, ma_type="invalid")
+
+    def test_calculate_time_aggregations_success(self, spark_data_service):
+        """Test calculating time aggregations successfully."""
+        from pyspark.sql.types import DateType
+
+        mock_df = MagicMock()
+        mock_df.count.return_value = 10
+        mock_schema = MagicMock()
+        mock_schema.__getitem__.return_value.dataType = DateType()
+        mock_df.schema = mock_schema
+
+        # Mock aggregation operations
+        mock_with_col = MagicMock()
+        mock_df.withColumn.return_value = mock_with_col
+        mock_grouped = MagicMock()
+        mock_with_col.groupBy.return_value = mock_grouped
+        mock_agg = MagicMock()
+        mock_grouped.agg.return_value = mock_agg
+        mock_agg.withColumn.return_value = mock_agg
+
+        # Mock result collection
+        mock_select = MagicMock()
+        mock_agg.select.return_value = mock_select
+        mock_result_row = MagicMock()
+        mock_result_row.__getitem__.side_effect = lambda key: {
+            "series_id": "GDP",
+            "period_str": "2024-01",
+            "aggregated_value": 25000.0,
+            "observation_count": 3,
+        }[key]
+        mock_select.collect.return_value = [mock_result_row]
+
+        # Mock Spark functions to avoid requiring SparkContext
+        with patch("app.services.spark_data_service.date_trunc"), \
+             patch("app.services.spark_data_service.col"), \
+             patch("app.services.spark_data_service.avg"), \
+             patch("app.services.spark_data_service.spark_sum"), \
+             patch("app.services.spark_data_service.spark_min"), \
+             patch("app.services.spark_data_service.spark_max"), \
+             patch("app.services.spark_data_service.count"), \
+             patch("app.services.spark_data_service.expr"):
+            result = spark_data_service.calculate_time_aggregations(
+                mock_df, period="monthly", agg_function="mean"
+            )
+
+            assert len(result) == 1
+            assert result[0]["series_id"] == "GDP"
+            assert result[0]["period"] == "2024-01"
+            assert result[0]["aggregation_function"] == "mean"
+
+    def test_calculate_time_aggregations_invalid_period(self, spark_data_service):
+        """Test calculating time aggregations with invalid period raises error."""
+        from pyspark.sql.types import DateType
+
+        mock_df = MagicMock()
+        mock_df.count.return_value = 10
+        mock_schema = MagicMock()
+        mock_schema.__getitem__.return_value.dataType = DateType()
+        mock_df.schema = mock_schema
+
+        with pytest.raises(ValueError, match="Unsupported period"):
+            spark_data_service.calculate_time_aggregations(
+                mock_df, period="invalid", agg_function="mean"
+            )
+
+    def test_calculate_time_aggregations_invalid_function(self, spark_data_service):
+        """Test calculating time aggregations with invalid function raises error."""
+        from pyspark.sql.types import DateType
+
+        mock_df = MagicMock()
+        mock_df.count.return_value = 10
+        mock_schema = MagicMock()
+        mock_schema.__getitem__.return_value.dataType = DateType()
+        mock_df.schema = mock_schema
+
+        # Mock Spark functions to avoid requiring SparkContext
+        # Need to patch before the agg_map dictionary is built
+        with patch("app.services.spark_data_service.avg", return_value=MagicMock()), \
+             patch("app.services.spark_data_service.spark_sum", return_value=MagicMock()), \
+             patch("app.services.spark_data_service.spark_min", return_value=MagicMock()), \
+             patch("app.services.spark_data_service.spark_max", return_value=MagicMock()), \
+             patch("app.services.spark_data_service.expr", return_value=MagicMock()), \
+             patch("app.services.spark_data_service.date_trunc", return_value=MagicMock()), \
+             patch("app.services.spark_data_service.col", return_value=MagicMock()):
+            with pytest.raises(ValueError, match="Unsupported aggregation function"):
+                spark_data_service.calculate_time_aggregations(
+                    mock_df, period="monthly", agg_function="invalid"
+                )

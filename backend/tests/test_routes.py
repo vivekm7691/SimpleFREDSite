@@ -6,6 +6,7 @@ import pytest
 from fastapi import status
 from unittest.mock import AsyncMock, MagicMock
 from httpx import HTTPStatusError, Response
+from pyspark.sql.types import StringType
 
 from app.models.schemas import FREDDataResponse, FREDSeriesInfo, FREDObservation
 
@@ -1008,3 +1009,498 @@ class TestCacheEndpoints:
         # Verify use_cache was passed
         call_args = mock_spark_data_service.batch_fetch_series.call_args
         assert call_args.kwargs["use_cache"] is False
+
+
+class TestAnalyticsEndpoint:
+    """Test cases for analytics endpoint."""
+
+    @pytest.mark.asyncio
+    async def test_analytics_statistics_success(
+        self,
+        async_client,
+        mock_spark_service,
+        mock_fred_service,
+        mock_spark_data_service,
+    ):
+        """Test successful statistics calculation."""
+        # Mock FRED response
+        mock_responses = [
+            FREDDataResponse(
+                series_id="GDP",
+                series_info=FREDSeriesInfo(
+                    id="GDP",
+                    title="Gross Domestic Product",
+                    units="Billions of Dollars",
+                    frequency="Quarterly",
+                    seasonal_adjustment=None,
+                ),
+                observations=[
+                    FREDObservation(date="2024-01-01", value=25000.0),
+                    FREDObservation(date="2024-02-01", value=25100.0),
+                ],
+                observation_count=2,
+            ),
+        ]
+
+        # Setup mocks
+        mock_spark_service.is_available.return_value = True
+        mock_spark_data_service.batch_fetch_series = AsyncMock(
+            return_value=mock_responses
+        )
+        mock_df = MagicMock()
+        # Mock count() to return non-zero value
+        mock_df.count.return_value = 10
+        # Mock schema to avoid AttributeError when accessing df.schema["date"]
+        mock_schema = MagicMock()
+        mock_schema.__getitem__.return_value.dataType = StringType()
+        mock_df.schema = mock_schema
+        mock_spark_data_service.convert_to_dataframe = MagicMock(return_value=mock_df)
+        mock_spark_data_service._prepare_dataframe_for_analytics = MagicMock(
+            return_value=mock_df
+        )
+        mock_spark_data_service.calculate_statistics = MagicMock(
+            return_value=[
+                {
+                    "series_id": "GDP",
+                    "mean": 25050.0,
+                    "median": 25050.0,
+                    "std": 50.0,
+                    "min": 25000.0,
+                    "max": 25100.0,
+                    "count": 2,
+                    "sum": 50100.0,
+                }
+            ]
+        )
+
+        response = await async_client.post(
+            "/api/spark/analytics",
+            json={
+                "series_ids": ["GDP"],
+                "analytics_types": ["statistics"],
+                "limit": 10,
+            },
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["series_count"] == 1
+        assert data["statistics"] is not None
+        assert len(data["statistics"]) == 1
+        assert data["statistics"][0]["series_id"] == "GDP"
+        assert data["statistics"][0]["mean"] == 25050.0
+
+    @pytest.mark.asyncio
+    async def test_analytics_growth_rates_success(
+        self,
+        async_client,
+        mock_spark_service,
+        mock_fred_service,
+        mock_spark_data_service,
+    ):
+        """Test successful growth rates calculation."""
+        mock_responses = [
+            FREDDataResponse(
+                series_id="GDP",
+                series_info=FREDSeriesInfo(
+                    id="GDP",
+                    title="Gross Domestic Product",
+                    units="Billions of Dollars",
+                    frequency="Quarterly",
+                    seasonal_adjustment=None,
+                ),
+                observations=[
+                    FREDObservation(date="2024-01-01", value=25000.0),
+                    FREDObservation(date="2024-02-01", value=25100.0),
+                ],
+                observation_count=2,
+            ),
+        ]
+
+        mock_spark_service.is_available.return_value = True
+        mock_spark_data_service.batch_fetch_series = AsyncMock(
+            return_value=mock_responses
+        )
+        mock_df = MagicMock()
+        # Mock count() to return non-zero value
+        mock_df.count.return_value = 10
+        # Mock schema to avoid AttributeError when accessing df.schema["date"]
+        mock_schema = MagicMock()
+        mock_schema.__getitem__.return_value.dataType = StringType()
+        mock_df.schema = mock_schema
+        mock_spark_data_service.convert_to_dataframe.return_value = mock_df
+        mock_spark_data_service._prepare_dataframe_for_analytics.return_value = mock_df
+        mock_spark_data_service.calculate_growth_rates = MagicMock(
+            return_value=[
+                {
+                    "series_id": "GDP",
+                    "date": "2024-02-01",
+                    "value": 25100.0,
+                    "previous_value": 25000.0,
+                    "growth_rate": 0.4,
+                    "growth_type": "period_over_period",
+                }
+            ]
+        )
+
+        response = await async_client.post(
+            "/api/spark/analytics",
+            json={
+                "series_ids": ["GDP"],
+                "analytics_types": ["growth_rates"],
+                "limit": 10,
+            },
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["growth_rates"] is not None
+        assert len(data["growth_rates"]) == 1
+        assert data["growth_rates"][0]["growth_type"] == "period_over_period"
+
+    @pytest.mark.asyncio
+    async def test_analytics_correlations_success(
+        self,
+        async_client,
+        mock_spark_service,
+        mock_fred_service,
+        mock_spark_data_service,
+    ):
+        """Test successful correlations calculation."""
+        mock_responses = [
+            FREDDataResponse(
+                series_id="GDP",
+                series_info=FREDSeriesInfo(
+                    id="GDP",
+                    title="Gross Domestic Product",
+                    units="Billions of Dollars",
+                    frequency="Quarterly",
+                    seasonal_adjustment=None,
+                ),
+                observations=[FREDObservation(date="2024-01-01", value=25000.0)],
+                observation_count=1,
+            ),
+            FREDDataResponse(
+                series_id="UNRATE",
+                series_info=FREDSeriesInfo(
+                    id="UNRATE",
+                    title="Unemployment Rate",
+                    units="Percent",
+                    frequency="Monthly",
+                    seasonal_adjustment=None,
+                ),
+                observations=[FREDObservation(date="2024-01-01", value=3.5)],
+                observation_count=1,
+            ),
+        ]
+
+        mock_spark_service.is_available.return_value = True
+        mock_spark_data_service.batch_fetch_series = AsyncMock(
+            return_value=mock_responses
+        )
+        mock_df = MagicMock()
+        # Mock count() to return non-zero value
+        mock_df.count.return_value = 10
+        # Mock schema to avoid AttributeError when accessing df.schema["date"]
+        mock_schema = MagicMock()
+        mock_schema.__getitem__.return_value.dataType = StringType()
+        mock_df.schema = mock_schema
+        mock_spark_data_service.convert_to_dataframe.return_value = mock_df
+        mock_spark_data_service._prepare_dataframe_for_analytics.return_value = mock_df
+        mock_spark_data_service.calculate_correlations = MagicMock(
+            return_value=[
+                {
+                    "series_id_1": "GDP",
+                    "series_id_2": "UNRATE",
+                    "correlation": -0.75,
+                }
+            ]
+        )
+
+        response = await async_client.post(
+            "/api/spark/analytics",
+            json={
+                "series_ids": ["GDP", "UNRATE"],
+                "analytics_types": ["correlations"],
+                "limit": 10,
+            },
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["correlations"] is not None
+        assert len(data["correlations"]) == 1
+        assert data["correlations"][0]["series_id_1"] == "GDP"
+        assert data["correlations"][0]["correlation"] == -0.75
+
+    @pytest.mark.asyncio
+    async def test_analytics_moving_averages_success(
+        self,
+        async_client,
+        mock_spark_service,
+        mock_fred_service,
+        mock_spark_data_service,
+    ):
+        """Test successful moving averages calculation."""
+        mock_responses = [
+            FREDDataResponse(
+                series_id="GDP",
+                series_info=FREDSeriesInfo(
+                    id="GDP",
+                    title="Gross Domestic Product",
+                    units="Billions of Dollars",
+                    frequency="Quarterly",
+                    seasonal_adjustment=None,
+                ),
+                observations=[FREDObservation(date="2024-01-01", value=25000.0)],
+                observation_count=1,
+            ),
+        ]
+
+        mock_spark_service.is_available.return_value = True
+        mock_spark_data_service.batch_fetch_series = AsyncMock(
+            return_value=mock_responses
+        )
+        mock_df = MagicMock()
+        # Mock count() to return non-zero value
+        mock_df.count.return_value = 10
+        # Mock schema to avoid AttributeError when accessing df.schema["date"]
+        mock_schema = MagicMock()
+        mock_schema.__getitem__.return_value.dataType = StringType()
+        mock_df.schema = mock_schema
+        mock_spark_data_service.convert_to_dataframe.return_value = mock_df
+        mock_spark_data_service._prepare_dataframe_for_analytics.return_value = mock_df
+        mock_spark_data_service.calculate_moving_averages = MagicMock(
+            return_value=[
+                {
+                    "series_id": "GDP",
+                    "date": "2024-01-01",
+                    "value": 25000.0,
+                    "moving_average": 25000.0,
+                    "moving_average_type": "sma",
+                    "window_size": 7,
+                }
+            ]
+        )
+
+        response = await async_client.post(
+            "/api/spark/analytics",
+            json={
+                "series_ids": ["GDP"],
+                "analytics_types": ["moving_averages"],
+                "limit": 10,
+                "moving_average_window": 7,
+                "moving_average_type": "sma",
+            },
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["moving_averages"] is not None
+        assert len(data["moving_averages"]) == 1
+        assert data["moving_averages"][0]["moving_average_type"] == "sma"
+
+    @pytest.mark.asyncio
+    async def test_analytics_time_aggregations_success(
+        self,
+        async_client,
+        mock_spark_service,
+        mock_fred_service,
+        mock_spark_data_service,
+    ):
+        """Test successful time aggregations calculation."""
+        mock_responses = [
+            FREDDataResponse(
+                series_id="GDP",
+                series_info=FREDSeriesInfo(
+                    id="GDP",
+                    title="Gross Domestic Product",
+                    units="Billions of Dollars",
+                    frequency="Quarterly",
+                    seasonal_adjustment=None,
+                ),
+                observations=[FREDObservation(date="2024-01-01", value=25000.0)],
+                observation_count=1,
+            ),
+        ]
+
+        mock_spark_service.is_available.return_value = True
+        mock_spark_data_service.batch_fetch_series = AsyncMock(
+            return_value=mock_responses
+        )
+        mock_df = MagicMock()
+        # Mock count() to return non-zero value
+        mock_df.count.return_value = 10
+        # Mock schema to avoid AttributeError when accessing df.schema["date"]
+        mock_schema = MagicMock()
+        mock_schema.__getitem__.return_value.dataType = StringType()
+        mock_df.schema = mock_schema
+        mock_spark_data_service.convert_to_dataframe.return_value = mock_df
+        mock_spark_data_service._prepare_dataframe_for_analytics.return_value = mock_df
+        mock_spark_data_service.calculate_time_aggregations = MagicMock(
+            return_value=[
+                {
+                    "series_id": "GDP",
+                    "period": "2024-01",
+                    "aggregated_value": 25000.0,
+                    "aggregation_function": "mean",
+                    "observation_count": 1,
+                }
+            ]
+        )
+
+        response = await async_client.post(
+            "/api/spark/analytics",
+            json={
+                "series_ids": ["GDP"],
+                "analytics_types": ["time_aggregations"],
+                "limit": 10,
+                "time_aggregation_period": "monthly",
+                "time_aggregation_function": "mean",
+            },
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["time_aggregations"] is not None
+        assert len(data["time_aggregations"]) == 1
+        assert data["time_aggregations"][0]["period"] == "2024-01"
+
+    @pytest.mark.asyncio
+    async def test_analytics_missing_moving_average_params(
+        self,
+        async_client,
+        mock_spark_service,
+        mock_fred_service,
+        mock_spark_data_service,
+    ):
+        """Test analytics endpoint with missing moving average parameters."""
+        mock_spark_service.is_available.return_value = True
+
+        response = await async_client.post(
+            "/api/spark/analytics",
+            json={
+                "series_ids": ["GDP"],
+                "analytics_types": ["moving_averages"],
+                "limit": 10,
+            },
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    @pytest.mark.asyncio
+    async def test_analytics_missing_time_aggregation_params(
+        self,
+        async_client,
+        mock_spark_service,
+        mock_fred_service,
+        mock_spark_data_service,
+    ):
+        """Test analytics endpoint with missing time aggregation parameters."""
+        mock_spark_service.is_available.return_value = True
+
+        response = await async_client.post(
+            "/api/spark/analytics",
+            json={
+                "series_ids": ["GDP"],
+                "analytics_types": ["time_aggregations"],
+                "limit": 10,
+            },
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    @pytest.mark.asyncio
+    async def test_analytics_spark_unavailable(
+        self,
+        async_client,
+        mock_spark_service,
+        mock_fred_service,
+        mock_spark_data_service,
+    ):
+        """Test analytics endpoint when Spark is unavailable."""
+        mock_spark_service.is_available.return_value = False
+
+        response = await async_client.post(
+            "/api/spark/analytics",
+            json={
+                "series_ids": ["GDP"],
+                "analytics_types": ["statistics"],
+                "limit": 10,
+            },
+        )
+
+        assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+
+    @pytest.mark.asyncio
+    async def test_analytics_multiple_types(
+        self,
+        async_client,
+        mock_spark_service,
+        mock_fred_service,
+        mock_spark_data_service,
+    ):
+        """Test analytics endpoint with multiple analytics types."""
+        mock_responses = [
+            FREDDataResponse(
+                series_id="GDP",
+                series_info=FREDSeriesInfo(
+                    id="GDP",
+                    title="Gross Domestic Product",
+                    units="Billions of Dollars",
+                    frequency="Quarterly",
+                    seasonal_adjustment=None,
+                ),
+                observations=[FREDObservation(date="2024-01-01", value=25000.0)],
+                observation_count=1,
+            ),
+        ]
+
+        mock_spark_service.is_available.return_value = True
+        mock_spark_data_service.batch_fetch_series = AsyncMock(
+            return_value=mock_responses
+        )
+        mock_df = MagicMock()
+        # Mock count() to return non-zero value
+        mock_df.count.return_value = 10
+        # Mock schema to avoid AttributeError when accessing df.schema["date"]
+        mock_schema = MagicMock()
+        mock_schema.__getitem__.return_value.dataType = StringType()
+        mock_df.schema = mock_schema
+        mock_spark_data_service.convert_to_dataframe = MagicMock(return_value=mock_df)
+        mock_spark_data_service._prepare_dataframe_for_analytics = MagicMock(
+            return_value=mock_df
+        )
+        # Ensure batch_fetch_series is also properly mocked
+        mock_spark_data_service.batch_fetch_series = AsyncMock(
+            return_value=mock_responses
+        )
+        mock_spark_data_service.calculate_statistics = MagicMock(
+            return_value=[
+                {
+                    "series_id": "GDP",
+                    "mean": 25000.0,
+                    "median": 25000.0,
+                    "std": 0.0,
+                    "min": 25000.0,
+                    "max": 25000.0,
+                    "count": 1,
+                    "sum": 25000.0,
+                }
+            ]
+        )
+        mock_spark_data_service.calculate_growth_rates = MagicMock(return_value=[])
+
+        response = await async_client.post(
+            "/api/spark/analytics",
+            json={
+                "series_ids": ["GDP"],
+                "analytics_types": ["statistics", "growth_rates"],
+                "limit": 10,
+            },
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["statistics"] is not None
+        assert data["growth_rates"] is not None
