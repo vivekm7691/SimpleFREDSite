@@ -62,9 +62,16 @@
 }
 
 .analytics-loading p {
-  margin: 0;
+  margin: 10px 0 0 0;
   color: #6c757d;
   font-size: 1.1em;
+}
+
+.analytics-loading .loading-hint {
+  margin-top: 10px;
+  font-size: 0.9em;
+  color: #adb5bd;
+  font-style: italic;
 }
 
 /* Error state */
@@ -99,6 +106,12 @@
   line-height: 1.6;
 }
 
+.error-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .error-retry-button {
   padding: 8px 16px;
   background: #ffc107;
@@ -119,6 +132,22 @@
 .error-retry-button:active {
   background: #ffb300;
   border-color: #ffb300;
+}
+
+.error-retry-button.primary {
+  background: #007bff;
+  color: white;
+  border-color: #007bff;
+}
+
+.error-retry-button.primary:hover {
+  background: #0056b3;
+  border-color: #0056b3;
+}
+
+.error-retry-button.primary:active {
+  background: #004085;
+  border-color: #004085;
 }
 
 /* Results */

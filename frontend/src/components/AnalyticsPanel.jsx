@@ -43,11 +43,44 @@ function AnalyticsPanel({ initialSeriesIds = [] }) {
       const response = await fetchAnalytics(analyticsRequest)
       setAnalyticsData(response)
     } catch (err) {
-      setError(err.message || 'Failed to fetch analytics data')
+      // Enhanced error handling with user-friendly messages
+      let errorMessage = 'Failed to fetch analytics data'
+      
+      if (err.message) {
+        errorMessage = err.message
+      } else if (err instanceof TypeError && err.message.includes('fetch')) {
+        errorMessage = 'Network error: Unable to connect to the backend server. Please ensure the backend is running.'
+      } else if (err.response) {
+        // Handle HTTP error responses
+        const status = err.response.status
+        if (status === 400) {
+          errorMessage = 'Invalid request. Please check your input parameters.'
+        } else if (status === 404) {
+          errorMessage = 'Analytics endpoint not found. Please check the API configuration.'
+        } else if (status === 500) {
+          errorMessage = 'Server error occurred while processing your request. Please try again later.'
+        } else if (status === 503) {
+          errorMessage = 'Spark service is unavailable. Please ensure Spark is running and try again.'
+        } else {
+          errorMessage = `Server error (${status}). Please try again later.`
+        }
+      }
+      
+      setError(errorMessage)
       console.error('Analytics error:', err)
     } finally {
       setLoading(false)
     }
+  }
+
+  /**
+   * Retry the last analytics request
+   */
+  const handleRetry = () => {
+    // Store the last request to retry
+    // For now, we'll just clear the error and let user resubmit
+    // In a more advanced implementation, we could store the last request
+    setError(null)
   }
 
   /**
@@ -80,6 +113,7 @@ function AnalyticsPanel({ initialSeriesIds = [] }) {
         <div className="analytics-loading">
           <div className="loading-spinner"></div>
           <p>Running analytics...</p>
+          <p className="loading-hint">This may take a few moments depending on the amount of data.</p>
         </div>
       )}
 
@@ -90,12 +124,26 @@ function AnalyticsPanel({ initialSeriesIds = [] }) {
           <div className="error-content">
             <h3>Error</h3>
             <p>{error}</p>
-            <button
-              className="error-retry-button"
-              onClick={() => setError(null)}
-            >
-              Dismiss
-            </button>
+            <div className="error-actions">
+              <button
+                className="error-retry-button"
+                onClick={handleRetry}
+              >
+                Dismiss
+              </button>
+              {error.includes('Network error') || error.includes('Server error') || error.includes('unavailable') ? (
+                <button
+                  className="error-retry-button primary"
+                  onClick={() => {
+                    setError(null)
+                    // Scroll to form to encourage retry
+                    document.querySelector('.analytics-panel-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                  }}
+                >
+                  Try Again
+                </button>
+              ) : null}
+            </div>
           </div>
         </div>
       )}
