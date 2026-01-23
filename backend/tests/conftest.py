@@ -180,5 +180,27 @@ def mock_spark_data_service(monkeypatch):
         def clear_cache(self, *args, **kwargs):
             return self._mock_service.clear_cache(*args, **kwargs)
 
+        def _prepare_dataframe_for_analytics(self, *args, **kwargs):
+            return self._mock_service._prepare_dataframe_for_analytics(*args, **kwargs)
+
+        def calculate_statistics(self, *args, **kwargs):
+            return self._mock_service.calculate_statistics(*args, **kwargs)
+
+        def calculate_growth_rates(self, *args, **kwargs):
+            return self._mock_service.calculate_growth_rates(*args, **kwargs)
+
+        def calculate_correlations(self, *args, **kwargs):
+            return self._mock_service.calculate_correlations(*args, **kwargs)
+
+        def calculate_moving_averages(self, *args, **kwargs):
+            return self._mock_service.calculate_moving_averages(*args, **kwargs)
+
+        def calculate_time_aggregations(self, *args, **kwargs):
+            return self._mock_service.calculate_time_aggregations(*args, **kwargs)
+
+        def __getattr__(self, name):
+            # Fallback to mock_service for any other attributes/methods
+            return getattr(self._mock_service, name)
+
     monkeypatch.setattr("app.api.routes.SparkDataService", MockSparkDataService)
     return mock_service
