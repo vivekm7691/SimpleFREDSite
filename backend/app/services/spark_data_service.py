@@ -15,7 +15,6 @@ from pyspark.sql.types import (
     StructField,
     StringType,
     DoubleType,
-    DateType,
 )
 from pyspark.sql.functions import (
     to_date,
@@ -27,14 +26,10 @@ from pyspark.sql.functions import (
     count,
     sum as spark_sum,
     lag,
-    window,
     date_trunc,
     year,
-    quarter,
     month,
     when,
-    isnan,
-    isnull,
     expr,
 )
 from pyspark.sql.window import Window
