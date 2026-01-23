@@ -1048,24 +1048,30 @@ class TestAnalyticsEndpoint:
             return_value=mock_responses
         )
         mock_df = MagicMock()
+        # Mock count() to return non-zero value
+        mock_df.count.return_value = 10
         # Mock schema to avoid AttributeError when accessing df.schema["date"]
         mock_schema = MagicMock()
         mock_schema.__getitem__.return_value.dataType = StringType()
         mock_df.schema = mock_schema
-        mock_spark_data_service.convert_to_dataframe.return_value = mock_df
-        mock_spark_data_service._prepare_dataframe_for_analytics.return_value = mock_df
-        mock_spark_data_service.calculate_statistics.return_value = [
-            {
-                "series_id": "GDP",
-                "mean": 25050.0,
-                "median": 25050.0,
-                "std": 50.0,
-                "min": 25000.0,
-                "max": 25100.0,
-                "count": 2,
-                "sum": 50100.0,
-            }
-        ]
+        mock_spark_data_service.convert_to_dataframe = MagicMock(return_value=mock_df)
+        mock_spark_data_service._prepare_dataframe_for_analytics = MagicMock(
+            return_value=mock_df
+        )
+        mock_spark_data_service.calculate_statistics = MagicMock(
+            return_value=[
+                {
+                    "series_id": "GDP",
+                    "mean": 25050.0,
+                    "median": 25050.0,
+                    "std": 50.0,
+                    "min": 25000.0,
+                    "max": 25100.0,
+                    "count": 2,
+                    "sum": 50100.0,
+                }
+            ]
+        )
 
         response = await async_client.post(
             "/api/spark/analytics",
@@ -1116,22 +1122,26 @@ class TestAnalyticsEndpoint:
             return_value=mock_responses
         )
         mock_df = MagicMock()
+        # Mock count() to return non-zero value
+        mock_df.count.return_value = 10
         # Mock schema to avoid AttributeError when accessing df.schema["date"]
         mock_schema = MagicMock()
         mock_schema.__getitem__.return_value.dataType = StringType()
         mock_df.schema = mock_schema
         mock_spark_data_service.convert_to_dataframe.return_value = mock_df
         mock_spark_data_service._prepare_dataframe_for_analytics.return_value = mock_df
-        mock_spark_data_service.calculate_growth_rates.return_value = [
-            {
-                "series_id": "GDP",
-                "date": "2024-02-01",
-                "value": 25100.0,
-                "previous_value": 25000.0,
-                "growth_rate": 0.4,
-                "growth_type": "period_over_period",
-            }
-        ]
+        mock_spark_data_service.calculate_growth_rates = MagicMock(
+            return_value=[
+                {
+                    "series_id": "GDP",
+                    "date": "2024-02-01",
+                    "value": 25100.0,
+                    "previous_value": 25000.0,
+                    "growth_rate": 0.4,
+                    "growth_type": "period_over_period",
+                }
+            ]
+        )
 
         response = await async_client.post(
             "/api/spark/analytics",
@@ -1189,19 +1199,23 @@ class TestAnalyticsEndpoint:
             return_value=mock_responses
         )
         mock_df = MagicMock()
+        # Mock count() to return non-zero value
+        mock_df.count.return_value = 10
         # Mock schema to avoid AttributeError when accessing df.schema["date"]
         mock_schema = MagicMock()
         mock_schema.__getitem__.return_value.dataType = StringType()
         mock_df.schema = mock_schema
         mock_spark_data_service.convert_to_dataframe.return_value = mock_df
         mock_spark_data_service._prepare_dataframe_for_analytics.return_value = mock_df
-        mock_spark_data_service.calculate_correlations.return_value = [
-            {
-                "series_id_1": "GDP",
-                "series_id_2": "UNRATE",
-                "correlation": -0.75,
-            }
-        ]
+        mock_spark_data_service.calculate_correlations = MagicMock(
+            return_value=[
+                {
+                    "series_id_1": "GDP",
+                    "series_id_2": "UNRATE",
+                    "correlation": -0.75,
+                }
+            ]
+        )
 
         response = await async_client.post(
             "/api/spark/analytics",
@@ -1248,22 +1262,26 @@ class TestAnalyticsEndpoint:
             return_value=mock_responses
         )
         mock_df = MagicMock()
+        # Mock count() to return non-zero value
+        mock_df.count.return_value = 10
         # Mock schema to avoid AttributeError when accessing df.schema["date"]
         mock_schema = MagicMock()
         mock_schema.__getitem__.return_value.dataType = StringType()
         mock_df.schema = mock_schema
         mock_spark_data_service.convert_to_dataframe.return_value = mock_df
         mock_spark_data_service._prepare_dataframe_for_analytics.return_value = mock_df
-        mock_spark_data_service.calculate_moving_averages.return_value = [
-            {
-                "series_id": "GDP",
-                "date": "2024-01-01",
-                "value": 25000.0,
-                "moving_average": 25000.0,
-                "moving_average_type": "sma",
-                "window_size": 7,
-            }
-        ]
+        mock_spark_data_service.calculate_moving_averages = MagicMock(
+            return_value=[
+                {
+                    "series_id": "GDP",
+                    "date": "2024-01-01",
+                    "value": 25000.0,
+                    "moving_average": 25000.0,
+                    "moving_average_type": "sma",
+                    "window_size": 7,
+                }
+            ]
+        )
 
         response = await async_client.post(
             "/api/spark/analytics",
@@ -1311,21 +1329,25 @@ class TestAnalyticsEndpoint:
             return_value=mock_responses
         )
         mock_df = MagicMock()
+        # Mock count() to return non-zero value
+        mock_df.count.return_value = 10
         # Mock schema to avoid AttributeError when accessing df.schema["date"]
         mock_schema = MagicMock()
         mock_schema.__getitem__.return_value.dataType = StringType()
         mock_df.schema = mock_schema
         mock_spark_data_service.convert_to_dataframe.return_value = mock_df
         mock_spark_data_service._prepare_dataframe_for_analytics.return_value = mock_df
-        mock_spark_data_service.calculate_time_aggregations.return_value = [
-            {
-                "series_id": "GDP",
-                "period": "2024-01",
-                "aggregated_value": 25000.0,
-                "aggregation_function": "mean",
-                "observation_count": 1,
-            }
-        ]
+        mock_spark_data_service.calculate_time_aggregations = MagicMock(
+            return_value=[
+                {
+                    "series_id": "GDP",
+                    "period": "2024-01",
+                    "aggregated_value": 25000.0,
+                    "aggregation_function": "mean",
+                    "observation_count": 1,
+                }
+            ]
+        )
 
         response = await async_client.post(
             "/api/spark/analytics",
@@ -1439,25 +1461,35 @@ class TestAnalyticsEndpoint:
             return_value=mock_responses
         )
         mock_df = MagicMock()
+        # Mock count() to return non-zero value
+        mock_df.count.return_value = 10
         # Mock schema to avoid AttributeError when accessing df.schema["date"]
         mock_schema = MagicMock()
         mock_schema.__getitem__.return_value.dataType = StringType()
         mock_df.schema = mock_schema
-        mock_spark_data_service.convert_to_dataframe.return_value = mock_df
-        mock_spark_data_service._prepare_dataframe_for_analytics.return_value = mock_df
-        mock_spark_data_service.calculate_statistics.return_value = [
-            {
-                "series_id": "GDP",
-                "mean": 25000.0,
-                "median": 25000.0,
-                "std": 0.0,
-                "min": 25000.0,
-                "max": 25000.0,
-                "count": 1,
-                "sum": 25000.0,
-            }
-        ]
-        mock_spark_data_service.calculate_growth_rates.return_value = []
+        mock_spark_data_service.convert_to_dataframe = MagicMock(return_value=mock_df)
+        mock_spark_data_service._prepare_dataframe_for_analytics = MagicMock(
+            return_value=mock_df
+        )
+        # Ensure batch_fetch_series is also properly mocked
+        mock_spark_data_service.batch_fetch_series = AsyncMock(
+            return_value=mock_responses
+        )
+        mock_spark_data_service.calculate_statistics = MagicMock(
+            return_value=[
+                {
+                    "series_id": "GDP",
+                    "mean": 25000.0,
+                    "median": 25000.0,
+                    "std": 0.0,
+                    "min": 25000.0,
+                    "max": 25000.0,
+                    "count": 1,
+                    "sum": 25000.0,
+                }
+            ]
+        )
+        mock_spark_data_service.calculate_growth_rates = MagicMock(return_value=[])
 
         response = await async_client.post(
             "/api/spark/analytics",
