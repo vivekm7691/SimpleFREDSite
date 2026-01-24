@@ -63,3 +63,14 @@ function CategoryGrid({ categories, onCategoryClick, loading = false }) {
 
 export default CategoryGrid
 
+
+
+
+
+
+
+
+
+
+
+

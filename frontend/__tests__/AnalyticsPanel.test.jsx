@@ -171,5 +171,102 @@ describe('AnalyticsPanel Component', () => {
     // The form should receive initialSeriesIds (tested via mock)
     expect(screen.getByTestId('analytics-form')).toBeInTheDocument()
   })
+
+  test('handles different error types with appropriate messages', async () => {
+    fetchAnalytics.mockRejectedValue(new Error('HTTP error! status: 503'))
+    
+    const user = userEvent.setup()
+    render(<AnalyticsPanel />)
+    
+    const submitButton = screen.getByRole('button', { name: /run analytics/i })
+    await user.click(submitButton)
+    
+    await waitFor(() => {
+      const errorHeading = screen.queryByRole('heading', { name: /error/i })
+      expect(errorHeading).toBeInTheDocument()
+    }, { timeout: 3000 })
+  })
+
+  test('handles timeout errors', async () => {
+    fetchAnalytics.mockRejectedValue(new Error('Request timeout'))
+    
+    const user = userEvent.setup()
+    render(<AnalyticsPanel />)
+    
+    const submitButton = screen.getByRole('button', { name: /run analytics/i })
+    await user.click(submitButton)
+    
+    await waitFor(() => {
+      const errorHeading = screen.queryByRole('heading', { name: /error/i })
+      expect(errorHeading).toBeInTheDocument()
+    }, { timeout: 3000 })
+  })
+
+  test('clears error when dismiss button is clicked', async () => {
+    fetchAnalytics.mockRejectedValue(new Error('Test error'))
+    
+    const user = userEvent.setup()
+    render(<AnalyticsPanel />)
+    
+    const submitButton = screen.getByRole('button', { name: /run analytics/i })
+    await user.click(submitButton)
+    
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: /dismiss/i })).toBeInTheDocument()
+    }, { timeout: 3000 })
+    
+    const dismissButton = screen.getByRole('button', { name: /dismiss/i })
+    await user.click(dismissButton)
+    
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: /dismiss/i })).not.toBeInTheDocument()
+    })
+  })
+
+  test('displays all analytics types when all are present', async () => {
+    const mockResponse = {
+      series_count: 2,
+      statistics: [{ series_id: 'GDP', mean: 100.0, median: 100.0, std: 10.0, min: 90.0, max: 110.0, count: 10, sum: 1000.0 }],
+      growth_rates: [{ series_id: 'GDP', date: '2024-01-01', value: 100.0, growth_rate: 0.05, growth_type: 'period_over_period' }],
+      correlations: [{ series_id_1: 'GDP', series_id_2: 'UNRATE', correlation: 0.8 }],
+      moving_averages: [{ series_id: 'GDP', date: '2024-01-01', value: 100.0, moving_average: 100.0, moving_average_type: 'sma', window_size: 7 }],
+      time_aggregations: [{ series_id: 'GDP', period: '2024-01', aggregated_value: 100.0, aggregation_function: 'mean', observation_count: 4 }],
+    }
+    
+    fetchAnalytics.mockResolvedValue(mockResponse)
+    
+    const user = userEvent.setup()
+    render(<AnalyticsPanel />)
+    
+    const submitButton = screen.getByRole('button', { name: /run analytics/i })
+    await user.click(submitButton)
+    
+    await waitFor(() => {
+      expect(screen.getByTestId('statistics-view')).toBeInTheDocument()
+      expect(screen.getByTestId('growth-rates-view')).toBeInTheDocument()
+      expect(screen.getByTestId('correlations-view')).toBeInTheDocument()
+      expect(screen.getByTestId('moving-averages-view')).toBeInTheDocument()
+      expect(screen.getByTestId('time-aggregations-view')).toBeInTheDocument()
+    })
+  })
+
+  test('displays series count in results header', async () => {
+    const mockResponse = {
+      series_count: 3,
+      statistics: [{ series_id: 'GDP', mean: 100.0, median: 100.0, std: 10.0, min: 90.0, max: 110.0, count: 10, sum: 1000.0 }],
+    }
+    
+    fetchAnalytics.mockResolvedValue(mockResponse)
+    
+    const user = userEvent.setup()
+    render(<AnalyticsPanel />)
+    
+    const submitButton = screen.getByRole('button', { name: /run analytics/i })
+    await user.click(submitButton)
+    
+    await waitFor(() => {
+      expect(screen.getByText(/analyzed 3 series/i)).toBeInTheDocument()
+    })
+  })
 })
 

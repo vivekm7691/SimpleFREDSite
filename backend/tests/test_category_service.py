@@ -294,3 +294,14 @@ class TestCategoryServiceGetCategorySeries:
         assert response_filtered.total_count == len(response_filtered.series)
         assert response_filtered.total_count <= response.total_count
 
+
+
+
+
+
+
+
+
+
+
+

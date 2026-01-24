@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AnalyticsForm Test</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+                'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+                sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .test-container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .test-info {
+            background: #e7f3ff;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            border-left: 4px solid #007bff;
+        }
+        .test-info h2 {
+            margin-top: 0;
+            color: #0056b3;
+        }
+        .test-info ul {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        .test-info li {
+            margin: 5px 0;
+        }
+        code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>AnalyticsForm Component Testing Guide</h1>
+        
+        <div class="test-info">
+            <h2>Option 1: Temporary Integration in App.jsx</h2>
+            <p>To test the AnalyticsForm component, you can temporarily add it to App.jsx:</p>
+            <ol>
+                <li>Import the component:
+                    <pre><code>import AnalyticsForm from './components/AnalyticsForm'</code></pre>
+                </li>
+                <li>Add it to the render (e.g., in the Analytics tab placeholder):
+                    <pre><code>{activeTab === 'analytics' && (
+  &lt;div className="tab-panel"&gt;
+    &lt;AnalyticsForm 
+      onSubmit={(request) => console.log('Analytics Request:', request)}
+      loading={false}
+      initialSeriesIds={fredData ? [fredData.series_id] : []}
+    /&gt;
+  &lt;/div&gt;
+)}</code></pre>
+                </li>
+                <li>Start the frontend dev server: <code>npm run dev</code></li>
+                <li>Navigate to the Analytics tab</li>
+            </ol>
+        </div>
+
+        <div class="test-info">
+            <h2>Option 2: Manual Testing Checklist</h2>
+            <p>Test the following scenarios:</p>
+            <ul>
+                <li><strong>Series ID Input:</strong>
+                    <ul>
+                        <li>Enter single series: "GDP"</li>
+                        <li>Enter multiple series: "GDP, UNRATE"</li>
+                        <li>Test with spaces: "GDP, UNRATE, CPIAUCSL"</li>
+                        <li>Test empty input (should show error)</li>
+                        <li>Test invalid format (should show error)</li>
+                    </ul>
+                </li>
+                <li><strong>Analytics Types:</strong>
+                    <ul>
+                        <li>Select/deselect each checkbox</li>
+                        <li>Select multiple types</li>
+                        <li>Submit with no types selected (should show error)</li>
+                        <li>Select "Correlations" with only 1 series (should show warning)</li>
+                    </ul>
+                </li>
+                <li><strong>Common Parameters:</strong>
+                    <ul>
+                        <li>Change limit value (test min: 1, max: 1000)</li>
+                        <li>Toggle sort order (asc/desc)</li>
+                        <li>Toggle use cache checkbox</li>
+                    </ul>
+                </li>
+                <li><strong>Moving Averages (conditional):</strong>
+                    <ul>
+                        <li>Select "Moving Averages" checkbox (parameters should appear)</li>
+                        <li>Change window size (test 2-365 range)</li>
+                        <li>Toggle between SMA and EMA</li>
+                        <li>Deselect "Moving Averages" (parameters should hide)</li>
+                        <li>Submit with Moving Averages selected but invalid window (should show error)</li>
+                    </ul>
+                </li>
+                <li><strong>Time Aggregations (conditional):</strong>
+                    <ul>
+                        <li>Select "Time Aggregations" checkbox (parameters should appear)</li>
+                        <li>Change period dropdown (daily, weekly, monthly, quarterly, yearly)</li>
+                        <li>Change function dropdown (mean, sum, min, max, first, last)</li>
+                        <li>Deselect "Time Aggregations" (parameters should hide)</li>
+                    </ul>
+                </li>
+                <li><strong>Form Submission:</strong>
+                    <ul>
+                        <li>Click "Run Analytics" with valid data (should call onSubmit callback)</li>
+                        <li>Test with loading=true (form should be disabled)</li>
+                        <li>Click "Reset" button (form should clear)</li>
+                    </ul>
+                </li>
+                <li><strong>Initial Values:</strong>
+                    <ul>
+                        <li>Test with initialSeriesIds prop (should pre-fill series input)</li>
+                    </ul>
+                </li>
+            </ul>
+        </div>
+
+        <div class="test-info">
+            <h2>Option 3: Browser Console Testing</h2>
+            <p>Once the component is rendered, you can test it in the browser console:</p>
+            <ol>
+                <li>Open browser DevTools (F12)</li>
+                <li>In the Console tab, you can interact with the form</li>
+                <li>Check form validation by submitting with invalid data</li>
+                <li>Monitor the onSubmit callback to see the request object</li>
+            </ol>
+        </div>
+
+        <div class="test-info">
+            <h2>Option 4: React DevTools</h2>
+            <p>Use React DevTools browser extension to:</p>
+            <ul>
+                <li>Inspect component state</li>
+                <li>View props</li>
+                <li>Monitor state changes as you interact with the form</li>
+            </ul>
+        </div>
+
+        <div class="test-info">
+            <h2>Expected onSubmit Callback Data</h2>
+            <p>When you submit a valid form, the onSubmit callback should receive an object like:</p>
+            <pre><code>{
+  series_ids: ["GDP", "UNRATE"],
+  analytics_types: ["statistics", "growth_rates"],
+  limit: 100,
+  sort_order: "desc",
+  use_cache: true,
+  // Conditional parameters (only if relevant analytics type is selected):
+  moving_average_window: 7,        // if moving_averages selected
+  moving_average_type: "sma",      // if moving_averages selected
+  time_aggregation_period: "monthly",      // if time_aggregations selected
+  time_aggregation_function: "mean"        // if time_aggregations selected
+}</code></pre>
+        </div>
+    </div>
+</body>
+</html>
+

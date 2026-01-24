@@ -48,22 +48,22 @@ function AnalyticsPanel({ initialSeriesIds = [] }) {
       
       if (err.message) {
         errorMessage = err.message
-      } else if (err instanceof TypeError && err.message.includes('fetch')) {
-        errorMessage = 'Network error: Unable to connect to the backend server. Please ensure the backend is running.'
-      } else if (err.response) {
-        // Handle HTTP error responses
-        const status = err.response.status
-        if (status === 400) {
-          errorMessage = 'Invalid request. Please check your input parameters.'
-        } else if (status === 404) {
+        // Check for specific error patterns in the message
+        if (err.message.includes('Failed to connect') || err.message.includes('Network error')) {
+          errorMessage = 'Network error: Unable to connect to the backend server. Please ensure the backend is running and accessible.'
+        } else if (err.message.includes('HTTP error! status: 400')) {
+          errorMessage = 'Invalid request. Please check your input parameters and try again.'
+        } else if (err.message.includes('HTTP error! status: 404')) {
           errorMessage = 'Analytics endpoint not found. Please check the API configuration.'
-        } else if (status === 500) {
+        } else if (err.message.includes('HTTP error! status: 500')) {
           errorMessage = 'Server error occurred while processing your request. Please try again later.'
-        } else if (status === 503) {
+        } else if (err.message.includes('HTTP error! status: 503') || err.message.includes('Spark service is not available')) {
           errorMessage = 'Spark service is unavailable. Please ensure Spark is running and try again.'
-        } else {
-          errorMessage = `Server error (${status}). Please try again later.`
+        } else if (err.message.includes('timeout') || err.message.includes('Timeout')) {
+          errorMessage = 'Request timed out. The server may be processing a large amount of data. Please try again with fewer series or a smaller limit.'
         }
+      } else if (err instanceof TypeError && err.message && err.message.includes('fetch')) {
+        errorMessage = 'Network error: Unable to connect to the backend server. Please ensure the backend is running and accessible.'
       }
       
       setError(errorMessage)
