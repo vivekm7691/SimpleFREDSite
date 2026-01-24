@@ -55,7 +55,13 @@ describe('CorrelationsView Component', () => {
     }
     
     // Table should be sorted (order may change)
-    expect(screen.getByText(/GDP/i)).toBeInTheDocument()
+    // GDP appears multiple times, so use getAllByText
+    const gdpElements = screen.getAllByText(/GDP/i)
+    expect(gdpElements.length).toBeGreaterThan(0)
+    
+    // Verify both series are present
+    expect(screen.getByText(/UNRATE/i)).toBeInTheDocument()
+    expect(screen.getByText(/CPIAUCSL/i)).toBeInTheDocument()
   })
 
   test('displays correlation strength labels', () => {
