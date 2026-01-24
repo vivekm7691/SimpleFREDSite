@@ -15,7 +15,7 @@ describe('CorrelationsView Component', () => {
   test('renders empty state when no data', () => {
     render(<CorrelationsView data={[]} />)
     
-    expect(screen.getByText(/correlations/i)).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /correlations/i })).toBeInTheDocument()
     expect(screen.getByText(/no correlation data available/i)).toBeInTheDocument()
   })
 
@@ -45,8 +45,14 @@ describe('CorrelationsView Component', () => {
     
     render(<CorrelationsView data={mockData} />)
     
-    const correlationHeader = screen.getByText(/correlation/i)
-    await user.click(correlationHeader)
+    // Find the correlation header in the table (more specific)
+    const headers = screen.getAllByText(/correlation/i)
+    const correlationHeader = headers.find(el => el.tagName === 'TH')
+    expect(correlationHeader).toBeInTheDocument()
+    
+    if (correlationHeader) {
+      await user.click(correlationHeader)
+    }
     
     // Table should be sorted (order may change)
     expect(screen.getByText(/GDP/i)).toBeInTheDocument()
@@ -63,9 +69,15 @@ describe('CorrelationsView Component', () => {
     
     render(<CorrelationsView data={mockData} />)
     
-    expect(screen.getByText(/strong positive/i)).toBeInTheDocument()
-    expect(screen.getByText(/moderate positive/i)).toBeInTheDocument()
-    expect(screen.getByText(/weak/i)).toBeInTheDocument()
+    // Check that correlation strength labels appear (may be in table or legend)
+    const strongPositive = screen.getAllByText(/strong positive/i)
+    expect(strongPositive.length).toBeGreaterThan(0)
+    
+    const moderatePositive = screen.getAllByText(/moderate positive/i)
+    expect(moderatePositive.length).toBeGreaterThan(0)
+    
+    const weak = screen.getAllByText(/weak/i)
+    expect(weak.length).toBeGreaterThan(0)
   })
 })
 

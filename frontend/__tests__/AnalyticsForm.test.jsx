@@ -62,7 +62,7 @@ describe('AnalyticsForm Component', () => {
     await user.click(submitButton)
     
     await waitFor(() => {
-      expect(screen.getByText(/at least one analytics type must be selected/i)).toBeInTheDocument()
+      expect(screen.getByText(/at least one analytics type is required/i)).toBeInTheDocument()
     })
     
     expect(mockOnSubmit).not.toHaveBeenCalled()
@@ -102,7 +102,7 @@ describe('AnalyticsForm Component', () => {
     
     // Check that moving average parameters appear
     expect(screen.getByLabelText(/window size/i)).toBeInTheDocument()
-    expect(screen.getByText(/type/i)).toBeInTheDocument()
+    expect(screen.getByText(/simple moving average/i)).toBeInTheDocument()
   })
 
   test('shows time aggregations parameters when time aggregations is selected', async () => {

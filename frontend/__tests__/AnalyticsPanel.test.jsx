@@ -70,7 +70,9 @@ describe('AnalyticsPanel Component', () => {
     await user.click(submitButton)
     
     await waitFor(() => {
-      expect(screen.getByText(/running analytics/i)).toBeInTheDocument()
+      // Check for loading spinner or loading text (may appear in multiple places)
+      const loadingElements = screen.getAllByText(/running analytics/i)
+      expect(loadingElements.length).toBeGreaterThan(0)
     })
   })
 
@@ -116,10 +118,11 @@ describe('AnalyticsPanel Component', () => {
     
     // Wait for error to appear (with longer timeout)
     await waitFor(() => {
-      const errorElement = screen.queryByText(/error/i) || screen.queryByText(/network/i)
-      expect(errorElement).toBeInTheDocument()
-    }, { timeout: 5000 })
-  })
+      // Error should appear in the error section
+      const errorHeading = screen.queryByRole('heading', { name: /error/i })
+      expect(errorHeading).toBeInTheDocument()
+    }, { timeout: 3000 })
+  }, 10000)
 
   test('displays multiple analytics views when multiple types are selected', async () => {
     const mockResponse = {

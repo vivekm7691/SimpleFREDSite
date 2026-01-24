@@ -8,7 +8,7 @@ describe('StatisticsView Component', () => {
   test('renders empty state when no data', () => {
     render(<StatisticsView data={[]} />)
     
-    expect(screen.getByText(/statistics/i)).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /statistics/i })).toBeInTheDocument()
     expect(screen.getByText(/no statistics data available/i)).toBeInTheDocument()
   })
 
@@ -28,7 +28,7 @@ describe('StatisticsView Component', () => {
     
     render(<StatisticsView data={mockData} />)
     
-    expect(screen.getByText(/statistics/i)).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /statistics/i })).toBeInTheDocument()
     expect(screen.getByText(/GDP/i)).toBeInTheDocument()
     expect(screen.getByText(/100.50/i)).toBeInTheDocument() // Mean
     expect(screen.getByText(/20/i)).toBeInTheDocument() // Count
@@ -81,7 +81,9 @@ describe('StatisticsView Component', () => {
     render(<StatisticsView data={mockData} />)
     
     expect(screen.getByText(/GDP/i)).toBeInTheDocument()
-    expect(screen.getByText(/N\/A/i)).toBeInTheDocument()
+    // Check that N/A appears (there may be multiple, so use getAllByText)
+    const naElements = screen.getAllByText(/N\/A/i)
+    expect(naElements.length).toBeGreaterThan(0)
   })
 })
 
