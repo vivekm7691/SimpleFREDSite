@@ -246,6 +246,59 @@
   color: #666;
 }
 
+.analytics-info {
+  padding: 1rem;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.analytics-info p {
+  margin: 0 0 1rem 0;
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+
+.analytics-features {
+  margin: 0.75rem 0 1.25rem 0;
+  padding-left: 1.5rem;
+  list-style-type: disc;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.analytics-features li {
+  margin: 0.5rem 0;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.analytics-button {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: #007bff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.1s ease;
+  margin-top: 0.5rem;
+}
+
+.analytics-button:hover {
+  background: #0056b3;
+  transform: translateY(-1px);
+}
+
+.analytics-button:active {
+  background: #004085;
+  transform: translateY(0);
+}
+
+.analytics-button:focus {
+  outline: 2px solid #007bff;
+  outline-offset: 2px;
+}
+
 /* Responsive: Mobile Overlay */
 @media (max-width: 768px) {
   .sidebar {

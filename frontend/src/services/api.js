@@ -159,3 +159,51 @@ export async function searchCategorySeries(categoryId, searchTerm) {
   return fetchCategorySeries(categoryId, searchTerm)
 }
 
+/**
+ * Fetch analytics for one or more FRED series
+ * @param {Object} analyticsRequest - Analytics request parameters
+ * @param {string[]} analyticsRequest.series_ids - Array of series IDs
+ * @param {string[]} analyticsRequest.analytics_types - Array of analytics types
+ * @param {number} analyticsRequest.limit - Maximum observations per series
+ * @param {string} analyticsRequest.sort_order - Sort order ('asc' or 'desc')
+ * @param {boolean} analyticsRequest.use_cache - Whether to use cached data
+ * @param {number} [analyticsRequest.moving_average_window] - Window size for moving averages
+ * @param {string} [analyticsRequest.moving_average_type] - 'sma' or 'ema'
+ * @param {string} [analyticsRequest.time_aggregation_period] - 'daily', 'weekly', 'monthly', 'quarterly', 'yearly'
+ * @param {string} [analyticsRequest.time_aggregation_function] - 'mean', 'sum', 'min', 'max', 'first', 'last'
+ * @returns {Promise<Object>} Analytics response
+ */
+export async function fetchAnalytics(analyticsRequest) {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/spark/analytics`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(analyticsRequest),
+    })
+
+    if (!response.ok) {
+      let error
+      try {
+        error = await response.json()
+      } catch {
+        // If JSON parsing fails, use HTTP status message
+        error = {}
+      }
+      throw new Error(error.detail || `HTTP error! status: ${response.status}`)
+    }
+
+    return await response.json()
+  } catch (error) {
+    // Handle network errors (e.g., backend not running, CORS issues)
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      throw new Error(
+        `Failed to connect to backend at ${API_BASE_URL}. Please ensure the backend server is running.`
+      )
+    }
+    // Re-throw other errors
+    throw error
+  }
+}
+

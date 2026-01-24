@@ -18,9 +18,10 @@ import './Sidebar.css'
  * Sidebar component
  * @param {Object} props - Component props
  * @param {Function} props.onSeriesSelect - Callback when a series is selected
+ * @param {Function} props.onAnalyticsClick - Callback when analytics section is clicked (switches to analytics tab)
  * @param {boolean} props.analyticsExpanded - Whether analytics section is expanded (for future use)
  */
-function Sidebar({ onSeriesSelect, analyticsExpanded: externalAnalyticsExpanded }) {
+function Sidebar({ onSeriesSelect, onAnalyticsClick, analyticsExpanded: externalAnalyticsExpanded }) {
   const [sidebarOpen, setSidebarOpen] = useState(() => {
     // Load from localStorage, default to true
     const saved = localStorage.getItem('sidebarOpen')
@@ -130,9 +131,24 @@ function Sidebar({ onSeriesSelect, analyticsExpanded: externalAnalyticsExpanded 
             </button>
             {analyticsExpanded && (
               <div id="analytics-content" className="sidebar-section-content">
-                <div className="analytics-placeholder">
-                  <p>Analytics features coming in Increment 5</p>
-                  <p className="placeholder-note">Batch processing, correlation, statistics, and more</p>
+                <div className="analytics-info">
+                  <p>Perform advanced analytics on FRED data:</p>
+                  <ul className="analytics-features">
+                    <li>Statistical summaries</li>
+                    <li>Growth rate calculations</li>
+                    <li>Correlation analysis</li>
+                    <li>Moving averages</li>
+                    <li>Time-based aggregations</li>
+                  </ul>
+                  {onAnalyticsClick && (
+                    <button
+                      className="analytics-button"
+                      onClick={onAnalyticsClick}
+                      aria-label="Open Analytics Dashboard"
+                    >
+                      Open Analytics Dashboard
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -144,4 +160,9 @@ function Sidebar({ onSeriesSelect, analyticsExpanded: externalAnalyticsExpanded 
 }
 
 export default Sidebar
+
+
+
+
+
 

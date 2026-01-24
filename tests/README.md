@@ -177,3 +177,6 @@ pytest tests/ -v -m integration --cov=app
 - Some tests may be skipped if services are not available
 - Tests verify the complete flow but may take longer than unit tests
 
+
+
+

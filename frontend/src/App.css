@@ -234,6 +234,25 @@ button:disabled {
   width: 100%;
 }
 
+/* Analytics Tab Panel Styles */
+.tab-panel .analytics-panel {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+/* Ensure analytics components fit within tab panel */
+.tab-panel .analytics-results {
+  width: 100%;
+  overflow-x: auto;
+}
+
+/* Analytics form integration in tab panel */
+.tab-panel .analytics-panel-form {
+  margin-bottom: 2rem;
+}
+
 .no-data-message {
   padding: 3rem;
   text-align: center;
@@ -694,6 +713,11 @@ button:disabled {
   .sidebar-collapsed ~ .App-main {
     margin-left: 60px;
   }
+
+  /* Analytics responsive styles for tablet */
+  .tab-panel .analytics-panel {
+    padding: 1.5rem;
+  }
 }
 
 @media (max-width: 768px) {
@@ -775,6 +799,23 @@ button:disabled {
 
   .search-form {
     padding: 1rem;
+  }
+
+  /* Analytics responsive styles for mobile */
+  .tab-panel .analytics-panel {
+    padding: 1rem;
+  }
+
+  .tab-panel .analytics-panel-header h2 {
+    font-size: 1.5rem;
+  }
+
+  .tab-panel .analytics-panel-description {
+    font-size: 0.95rem;
+  }
+
+  .tab-panel .analytics-results-content {
+    gap: 20px;
   }
 }
 

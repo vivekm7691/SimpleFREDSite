@@ -225,3 +225,8 @@ After testing, if everything works:
 3. Test with different screen sizes
 4. Ready for Increment 2: Spark Infrastructure
 
+
+
+
+
+

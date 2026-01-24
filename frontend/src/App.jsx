@@ -12,6 +12,7 @@ import './App.css'
 import { fetchFREDData, summarizeData } from './services/api'
 import Sidebar from './components/Sidebar'
 import DataGraph from './components/DataGraph'
+import AnalyticsPanel from './components/AnalyticsPanel'
 
 function App() {
   // State management for form input, loading, errors, and data
@@ -128,6 +129,7 @@ function App() {
         <Sidebar
           key={categoryBrowserKey}
           onSeriesSelect={handleSeriesSelect}
+          onAnalyticsClick={() => setActiveTab('analytics')}
         />
 
         {/* Main Content Area */}
@@ -212,8 +214,6 @@ function App() {
                   className={`tab-button ${activeTab === 'analytics' ? 'active' : ''}`}
                   onClick={() => setActiveTab('analytics')}
                   aria-selected={activeTab === 'analytics'}
-                  disabled={true}
-                  title="Analytics features coming in Increment 5"
                 >
                   Analytics
                 </button>
@@ -238,12 +238,9 @@ function App() {
 
                 {activeTab === 'analytics' && (
                   <div className="tab-panel">
-                    <div className="analytics-placeholder">
-                      <p>Analytics features coming in Increment 5</p>
-                      <p className="placeholder-note">
-                        Correlation analysis, statistical summaries, aggregations, and more
-                      </p>
-                    </div>
+                    <AnalyticsPanel 
+                      initialSeriesIds={fredData ? [fredData.series_id] : []}
+                    />
                   </div>
                 )}
               </div>
