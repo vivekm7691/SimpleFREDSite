@@ -28,6 +28,7 @@ module.exports = {
     '!src/components/Sidebar.jsx',
     // Exclude index files (just exports)
     '!src/components/analytics/index.js',
+    '!src/components/advanced-analytics/index.js',
   ],
   coverageThreshold: {
     global: {

@@ -207,3 +207,55 @@ export async function fetchAnalytics(analyticsRequest) {
   }
 }
 
+/**
+ * Fetch advanced analytics for one or more FRED series
+ * @param {Object} advancedAnalyticsRequest - Advanced analytics request parameters
+ * @param {string[]} advancedAnalyticsRequest.series_ids - Array of series IDs
+ * @param {string[]} advancedAnalyticsRequest.analytics_types - Array of analytics types: 'forecasts', 'anomalies', 'trends', 'seasonal_decomposition', 'volatility'
+ * @param {number} advancedAnalyticsRequest.limit - Maximum observations per series
+ * @param {string} advancedAnalyticsRequest.sort_order - Sort order ('asc' or 'desc')
+ * @param {boolean} advancedAnalyticsRequest.use_cache - Whether to use cached data
+ * @param {number} [advancedAnalyticsRequest.forecast_horizon] - Number of periods to forecast
+ * @param {string} [advancedAnalyticsRequest.forecast_method] - 'arima', 'exponential_smoothing', or 'linear_regression'
+ * @param {string} [advancedAnalyticsRequest.anomaly_method] - 'z_score', 'iqr', or 'moving_average'
+ * @param {number} [advancedAnalyticsRequest.anomaly_threshold] - Z-score threshold (default: 3.0)
+ * @param {string} [advancedAnalyticsRequest.trend_type] - 'linear' or 'polynomial'
+ * @param {number} [advancedAnalyticsRequest.polynomial_degree] - For polynomial trends
+ * @param {string} [advancedAnalyticsRequest.decomposition_type] - 'additive' or 'multiplicative'
+ * @param {number} [advancedAnalyticsRequest.seasonal_period] - Seasonal period (e.g., 12 for monthly)
+ * @param {number} [advancedAnalyticsRequest.volatility_window] - Rolling window size (default: 30)
+ * @returns {Promise<Object>} Advanced analytics response
+ */
+export async function fetchAdvancedAnalytics(advancedAnalyticsRequest) {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/spark/advanced-analytics`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(advancedAnalyticsRequest),
+    })
+
+    if (!response.ok) {
+      let error
+      try {
+        error = await response.json()
+      } catch {
+        // If JSON parsing fails, use HTTP status message
+        error = {}
+      }
+      throw new Error(error.detail || `HTTP error! status: ${response.status}`)
+    }
+
+    return await response.json()
+  } catch (error) {
+    // Handle network errors (e.g., backend not running, CORS issues)
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      throw new Error(
+        `Failed to connect to backend at ${API_BASE_URL}. Please ensure the backend server is running.`
+      )
+    }
+    // Re-throw other errors
+    throw error
+  }
+}

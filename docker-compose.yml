@@ -11,6 +11,11 @@ services:
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - PYTHONUNBUFFERED=1
       - DATA_DIR=/app/data
+      # Spark configuration (optional - defaults provided in code)
+      - SPARK_DRIVER_MEMORY=${SPARK_DRIVER_MEMORY:-2g}
+      - SPARK_EXECUTOR_MEMORY=${SPARK_EXECUTOR_MEMORY:-2g}
+      - SPARK_MAX_RESULT_SIZE=${SPARK_MAX_RESULT_SIZE:-1g}
+      - SPARK_SHUFFLE_PARTITIONS=${SPARK_SHUFFLE_PARTITIONS:-200}
     volumes:
       # Data directory for Spark (Parquet files stored on host machine)
       - ./data:/app/data

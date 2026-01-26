@@ -35,6 +35,19 @@ jest.mock('../src/components/DataGraph', () => {
   }
 })
 
+// Mock AnalyticsPanel and AdvancedAnalyticsPanel
+jest.mock('../src/components/AnalyticsPanel', () => {
+  return function MockAnalyticsPanel({ initialSeriesIds }) {
+    return <div data-testid="analytics-panel">Analytics Panel: {initialSeriesIds.join(', ')}</div>
+  }
+})
+
+jest.mock('../src/components/AdvancedAnalyticsPanel', () => {
+  return function MockAdvancedAnalyticsPanel({ initialSeriesIds }) {
+    return <div data-testid="advanced-analytics-panel">Advanced Analytics Panel: {initialSeriesIds.join(', ')}</div>
+  }
+})
+
 describe('App Component', () => {
   const mockCategories = {
     categories: [
@@ -361,6 +374,171 @@ describe('App Component', () => {
     await waitFor(() => {
       expect(screen.queryByTestId('data-graph')).not.toBeInTheDocument()
       expect(screen.getByText(errorMessage)).toBeInTheDocument()
+    })
+  })
+
+  it('should display analytics tab when data is loaded', async () => {
+    const user = userEvent.setup()
+    const mockFREDData = {
+      series_id: 'GDP',
+      series_info: { id: 'GDP', title: 'GDP' },
+      observations: [
+        { date: '2024-01-01', value: 25000.0 },
+      ],
+      observation_count: 1,
+    }
+
+    fetchFREDData.mockResolvedValueOnce(mockFREDData)
+    summarizeData.mockResolvedValueOnce('Summary')
+
+    render(<App />)
+
+    const input = screen.getByLabelText('FRED Series ID:')
+    const submitButton = screen.getByRole('button', { name: /fetch & summarize/i })
+
+    await user.type(input, 'GDP')
+    await user.click(submitButton)
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /analytics/i })).toBeInTheDocument()
+    })
+  })
+
+  it('should display advanced analytics tab when data is loaded', async () => {
+    const user = userEvent.setup()
+    const mockFREDData = {
+      series_id: 'GDP',
+      series_info: { id: 'GDP', title: 'GDP' },
+      observations: [
+        { date: '2024-01-01', value: 25000.0 },
+      ],
+      observation_count: 1,
+    }
+
+    fetchFREDData.mockResolvedValueOnce(mockFREDData)
+    summarizeData.mockResolvedValueOnce('Summary')
+
+    render(<App />)
+
+    const input = screen.getByLabelText('FRED Series ID:')
+    const submitButton = screen.getByRole('button', { name: /fetch & summarize/i })
+
+    await user.type(input, 'GDP')
+    await user.click(submitButton)
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /advanced analytics/i })).toBeInTheDocument()
+    })
+  })
+
+  it('should switch to analytics tab when clicked', async () => {
+    const user = userEvent.setup()
+    const mockFREDData = {
+      series_id: 'GDP',
+      series_info: { id: 'GDP', title: 'GDP' },
+      observations: [
+        { date: '2024-01-01', value: 25000.0 },
+      ],
+      observation_count: 1,
+    }
+
+    fetchFREDData.mockResolvedValueOnce(mockFREDData)
+    summarizeData.mockResolvedValueOnce('Summary')
+
+    render(<App />)
+
+    const input = screen.getByLabelText('FRED Series ID:')
+    const submitButton = screen.getByRole('button', { name: /fetch & summarize/i })
+
+    await user.type(input, 'GDP')
+    await user.click(submitButton)
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /analytics/i })).toBeInTheDocument()
+    })
+
+    const analyticsTab = screen.getByRole('button', { name: /analytics/i })
+    await user.click(analyticsTab)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('analytics-panel')).toBeInTheDocument()
+      expect(screen.getByText(/analytics panel: gdp/i)).toBeInTheDocument()
+    })
+  })
+
+  it('should switch to advanced analytics tab when clicked', async () => {
+    const user = userEvent.setup()
+    const mockFREDData = {
+      series_id: 'GDP',
+      series_info: { id: 'GDP', title: 'GDP' },
+      observations: [
+        { date: '2024-01-01', value: 25000.0 },
+      ],
+      observation_count: 1,
+    }
+
+    fetchFREDData.mockResolvedValueOnce(mockFREDData)
+    summarizeData.mockResolvedValueOnce('Summary')
+
+    render(<App />)
+
+    const input = screen.getByLabelText('FRED Series ID:')
+    const submitButton = screen.getByRole('button', { name: /fetch & summarize/i })
+
+    await user.type(input, 'GDP')
+    await user.click(submitButton)
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /advanced analytics/i })).toBeInTheDocument()
+    })
+
+    const advancedAnalyticsTab = screen.getByRole('button', { name: /advanced analytics/i })
+    await user.click(advancedAnalyticsTab)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('advanced-analytics-panel')).toBeInTheDocument()
+      expect(screen.getByText(/advanced analytics panel: gdp/i)).toBeInTheDocument()
+    })
+  })
+
+  it('should pass initialSeriesIds to analytics panels', async () => {
+    const user = userEvent.setup()
+    const mockFREDData = {
+      series_id: 'GDP',
+      series_info: { id: 'GDP', title: 'GDP' },
+      observations: [
+        { date: '2024-01-01', value: 25000.0 },
+      ],
+      observation_count: 1,
+    }
+
+    fetchFREDData.mockResolvedValueOnce(mockFREDData)
+    summarizeData.mockResolvedValueOnce('Summary')
+
+    render(<App />)
+
+    const input = screen.getByLabelText('FRED Series ID:')
+    const submitButton = screen.getByRole('button', { name: /fetch & summarize/i })
+
+    await user.type(input, 'GDP')
+    await user.click(submitButton)
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /analytics/i })).toBeInTheDocument()
+    })
+
+    const analyticsTab = screen.getByRole('button', { name: /analytics/i })
+    await user.click(analyticsTab)
+
+    await waitFor(() => {
+      expect(screen.getByText(/analytics panel: gdp/i)).toBeInTheDocument()
+    })
+
+    const advancedAnalyticsTab = screen.getByRole('button', { name: /advanced analytics/i })
+    await user.click(advancedAnalyticsTab)
+
+    await waitFor(() => {
+      expect(screen.getByText(/advanced analytics panel: gdp/i)).toBeInTheDocument()
     })
   })
 })

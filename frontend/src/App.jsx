@@ -13,6 +13,7 @@ import { fetchFREDData, summarizeData } from './services/api'
 import Sidebar from './components/Sidebar'
 import DataGraph from './components/DataGraph'
 import AnalyticsPanel from './components/AnalyticsPanel'
+import AdvancedAnalyticsPanel from './components/AdvancedAnalyticsPanel'
 
 function App() {
   // State management for form input, loading, errors, and data
@@ -26,7 +27,7 @@ function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   
   // State management for tabs
-  const [activeTab, setActiveTab] = useState('main') // 'main' | 'analytics'
+  const [activeTab, setActiveTab] = useState('main') // 'main' | 'analytics' | 'advanced-analytics'
   
   // State management for category browser (for reset functionality)
   const [categoryBrowserKey, setCategoryBrowserKey] = useState(0) // Key to reset CategoryBrowser component
@@ -130,6 +131,7 @@ function App() {
           key={categoryBrowserKey}
           onSeriesSelect={handleSeriesSelect}
           onAnalyticsClick={() => setActiveTab('analytics')}
+          onAdvancedAnalyticsClick={() => setActiveTab('advanced-analytics')}
         />
 
         {/* Main Content Area */}
@@ -217,6 +219,13 @@ function App() {
                 >
                   Analytics
                 </button>
+                <button
+                  className={`tab-button ${activeTab === 'advanced-analytics' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('advanced-analytics')}
+                  aria-selected={activeTab === 'advanced-analytics'}
+                >
+                  Advanced Analytics
+                </button>
               </div>
 
               {/* Tab Content */}
@@ -239,6 +248,14 @@ function App() {
                 {activeTab === 'analytics' && (
                   <div className="tab-panel">
                     <AnalyticsPanel 
+                      initialSeriesIds={fredData ? [fredData.series_id] : []}
+                    />
+                  </div>
+                )}
+
+                {activeTab === 'advanced-analytics' && (
+                  <div className="tab-panel">
+                    <AdvancedAnalyticsPanel 
                       initialSeriesIds={fredData ? [fredData.series_id] : []}
                     />
                   </div>

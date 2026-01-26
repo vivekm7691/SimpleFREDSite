@@ -19,9 +19,10 @@ import './Sidebar.css'
  * @param {Object} props - Component props
  * @param {Function} props.onSeriesSelect - Callback when a series is selected
  * @param {Function} props.onAnalyticsClick - Callback when analytics section is clicked (switches to analytics tab)
+ * @param {Function} props.onAdvancedAnalyticsClick - Callback when advanced analytics is clicked (switches to advanced analytics tab)
  * @param {boolean} props.analyticsExpanded - Whether analytics section is expanded (for future use)
  */
-function Sidebar({ onSeriesSelect, onAnalyticsClick, analyticsExpanded: externalAnalyticsExpanded }) {
+function Sidebar({ onSeriesSelect, onAnalyticsClick, onAdvancedAnalyticsClick, analyticsExpanded: externalAnalyticsExpanded }) {
   const [sidebarOpen, setSidebarOpen] = useState(() => {
     // Load from localStorage, default to true
     const saved = localStorage.getItem('sidebarOpen')
@@ -147,6 +148,16 @@ function Sidebar({ onSeriesSelect, onAnalyticsClick, analyticsExpanded: external
                       aria-label="Open Analytics Dashboard"
                     >
                       Open Analytics Dashboard
+                    </button>
+                  )}
+                  {onAdvancedAnalyticsClick && (
+                    <button
+                      className="analytics-button"
+                      onClick={onAdvancedAnalyticsClick}
+                      aria-label="Open Advanced Analytics Dashboard"
+                      style={{ marginTop: '10px' }}
+                    >
+                      Open Advanced Analytics
                     </button>
                   )}
                 </div>

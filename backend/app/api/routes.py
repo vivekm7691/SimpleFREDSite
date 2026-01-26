@@ -19,6 +19,8 @@ from app.models.schemas import (
     CacheListResponse,
     AnalyticsRequest,
     AnalyticsResponse,
+    AdvancedAnalyticsRequest,
+    AdvancedAnalyticsResponse,
 )
 from app.services.fred_service import get_fred_service
 from app.services.category_service import get_category_service
@@ -665,4 +667,175 @@ async def perform_analytics(request: AnalyticsRequest):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error performing analytics: {str(e)}",
+        )
+
+
+@router.post("/spark/advanced-analytics", response_model=AdvancedAnalyticsResponse)
+async def perform_advanced_analytics(request: AdvancedAnalyticsRequest):
+    """
+    Perform advanced analytics on FRED series data.
+
+    Supports:
+    - Forecasting (ARIMA, exponential smoothing, linear regression)
+    - Anomaly detection (Z-score, IQR, moving average deviation)
+    - Trend analysis (linear, polynomial)
+    - Seasonal decomposition (additive, multiplicative)
+    - Volatility analysis (rolling volatility)
+
+    Args:
+        request: AdvancedAnalyticsRequest with series IDs and analytics options
+
+    Returns:
+        AdvancedAnalyticsResponse with requested analytics results
+
+    Raises:
+        HTTPException: If Spark is unavailable, request is invalid, or processing fails
+    """
+    try:
+        # Verify Spark is available
+        spark_service = get_spark_service()
+        if not spark_service.is_available():
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Spark service is not available",
+            )
+
+        # Validate request parameters
+        if "forecasts" in request.analytics_types:
+            if not request.forecast_horizon or not request.forecast_method:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="forecast_horizon and forecast_method are required when 'forecasts' is in analytics_types",
+                )
+
+        if "anomalies" in request.analytics_types:
+            if not request.anomaly_method:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="anomaly_method is required when 'anomalies' is in analytics_types",
+                )
+
+        if "trends" in request.analytics_types:
+            if not request.trend_type:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="trend_type is required when 'trends' is in analytics_types",
+                )
+
+        if "seasonal_decomposition" in request.analytics_types:
+            if (
+                not request.decomposition_type
+                or not request.seasonal_period
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="decomposition_type and seasonal_period are required when 'seasonal_decomposition' is in analytics_types",
+                )
+
+        # Initialize services
+        fred_service = get_fred_service()
+        spark_data_service = SparkDataService(spark_service, fred_service)
+
+        # Fetch series data
+        logger.info(
+            f"Fetching data for {len(request.series_ids)} series with limit={request.limit}"
+        )
+        fred_responses = await spark_data_service.batch_fetch_series(
+            request.series_ids,
+            limit=request.limit,
+            sort_order=request.sort_order,
+            use_cache=request.use_cache,
+        )
+
+        if not fred_responses:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No data found for the specified series",
+            )
+
+        # Convert to DataFrame
+        df = spark_data_service.convert_to_dataframe(fred_responses)
+
+        # Prepare DataFrame for analytics (convert dates, sort)
+        df = spark_data_service._prepare_dataframe_for_analytics(df)
+
+        # Initialize response data
+        forecasts = None
+        anomalies = None
+        trends = None
+        seasonal_decompositions = None
+        volatility = None
+
+        # Perform requested analytics
+        if "forecasts" in request.analytics_types:
+            logger.info(
+                f"Calculating forecasts using {request.forecast_method} with horizon {request.forecast_horizon}"
+            )
+            forecasts = spark_data_service.calculate_forecasts(
+                df,
+                forecast_horizon=request.forecast_horizon,
+                forecast_method=request.forecast_method,
+            )
+
+        if "anomalies" in request.analytics_types:
+            logger.info(f"Detecting anomalies using {request.anomaly_method}")
+            threshold = request.anomaly_threshold if request.anomaly_threshold else 3.0
+            anomalies = spark_data_service.detect_anomalies(
+                df,
+                method=request.anomaly_method,
+                threshold=threshold,
+            )
+
+        if "trends" in request.analytics_types:
+            logger.info(f"Analyzing trends using {request.trend_type}")
+            polynomial_degree = (
+                request.polynomial_degree if request.polynomial_degree else 2
+            )
+            trends = spark_data_service.analyze_trends(
+                df,
+                trend_type=request.trend_type,
+                polynomial_degree=polynomial_degree,
+            )
+
+        if "seasonal_decomposition" in request.analytics_types:
+            logger.info(
+                f"Performing {request.decomposition_type} seasonal decomposition with period {request.seasonal_period}"
+            )
+            seasonal_decompositions = spark_data_service.decompose_seasonal(
+                df,
+                decomposition_type=request.decomposition_type,
+                seasonal_period=request.seasonal_period,
+            )
+
+        if "volatility" in request.analytics_types:
+            logger.info("Calculating volatility")
+            volatility_window = (
+                request.volatility_window if request.volatility_window else 30
+            )
+            volatility = spark_data_service.calculate_volatility(
+                df, window_size=volatility_window
+            )
+
+        return AdvancedAnalyticsResponse(
+            series_count=len(request.series_ids),
+            forecasts=forecasts,
+            anomalies=anomalies,
+            trends=trends,
+            seasonal_decompositions=seasonal_decompositions,
+            volatility=volatility,
+        )
+
+    except ValueError as e:
+        logger.error(f"ValueError in perform_advanced_analytics: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            f"Error in perform_advanced_analytics: {type(e).__name__}: {str(e)}",
+            exc_info=True,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error performing advanced analytics: {str(e)}",
         )

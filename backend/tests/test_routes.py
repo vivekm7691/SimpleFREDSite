@@ -1504,3 +1504,451 @@ class TestAnalyticsEndpoint:
         data = response.json()
         assert data["statistics"] is not None
         assert data["growth_rates"] is not None
+
+
+class TestAdvancedAnalyticsEndpoint:
+    """Test cases for the advanced analytics endpoint."""
+
+    @pytest.mark.asyncio
+    async def test_advanced_analytics_anomaly_detection_success(
+        self,
+        async_client,
+        mock_spark_service,
+        mock_fred_service,
+        mock_spark_data_service,
+    ):
+        """Test advanced analytics endpoint with anomaly detection."""
+        mock_spark_service.is_available.return_value = True
+        mock_responses = [
+            FREDDataResponse(
+                series_id="GDP",
+                series_info=FREDSeriesInfo(
+                    id="GDP",
+                    title="Gross Domestic Product",
+                    units="Billions of Dollars",
+                ),
+                observations=[
+                    FREDObservation(date="2024-01-01", value=100.0),
+                    FREDObservation(date="2024-02-01", value=105.0),
+                    FREDObservation(date="2024-03-01", value=200.0),  # Anomaly
+                ],
+                observation_count=3,
+            )
+        ]
+
+        mock_spark_data_service.batch_fetch_series = AsyncMock(
+            return_value=mock_responses
+        )
+        mock_df = MagicMock()
+        mock_df.schema = MagicMock()
+        mock_df.schema.__getitem__ = MagicMock(return_value=MagicMock(dataType=StringType()))
+        mock_df.count.return_value = 3
+        mock_spark_data_service.convert_to_dataframe.return_value = mock_df
+        mock_spark_data_service._prepare_dataframe_for_analytics.return_value = mock_df
+        mock_spark_data_service.detect_anomalies.return_value = [
+            {
+                "series_id": "GDP",
+                "date": "2024-03-01",
+                "value": 200.0,
+                "expected_value": 102.5,
+                "deviation": 3.5,
+                "detection_method": "z_score",
+                "severity": "high",
+            }
+        ]
+
+        response = await async_client.post(
+            "/api/spark/advanced-analytics",
+            json={
+                "series_ids": ["GDP"],
+                "analytics_types": ["anomalies"],
+                "limit": 100,
+                "anomaly_method": "z_score",
+                "anomaly_threshold": 3.0,
+            },
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["series_count"] == 1
+        assert data["anomalies"] is not None
+        assert len(data["anomalies"]) == 1
+        assert data["anomalies"][0]["series_id"] == "GDP"
+        assert data["anomalies"][0]["detection_method"] == "z_score"
+        assert data["anomalies"][0]["severity"] == "high"
+
+    @pytest.mark.asyncio
+    async def test_advanced_analytics_volatility_success(
+        self,
+        async_client,
+        mock_spark_service,
+        mock_fred_service,
+        mock_spark_data_service,
+    ):
+        """Test advanced analytics endpoint with volatility analysis."""
+        mock_spark_service.is_available.return_value = True
+        mock_responses = [
+            FREDDataResponse(
+                series_id="GDP",
+                series_info=FREDSeriesInfo(id="GDP", title="GDP"),
+                observations=[
+                    FREDObservation(date="2024-01-01", value=100.0),
+                    FREDObservation(date="2024-02-01", value=105.0),
+                    FREDObservation(date="2024-03-01", value=110.0),
+                ],
+                observation_count=3,
+            )
+        ]
+
+        mock_spark_data_service.batch_fetch_series = AsyncMock(
+            return_value=mock_responses
+        )
+        mock_df = MagicMock()
+        mock_df.schema = MagicMock()
+        mock_df.schema.__getitem__ = MagicMock(return_value=MagicMock(dataType=StringType()))
+        mock_df.count.return_value = 3
+        mock_spark_data_service.convert_to_dataframe.return_value = mock_df
+        mock_spark_data_service._prepare_dataframe_for_analytics.return_value = mock_df
+        mock_spark_data_service.calculate_volatility.return_value = [
+            {
+                "series_id": "GDP",
+                "date": "2024-02-01",
+                "volatility": 0.05,
+                "annualized_volatility": 0.79,
+                "return_value": 5.0,
+                "window_size": 30,
+            }
+        ]
+
+        response = await async_client.post(
+            "/api/spark/advanced-analytics",
+            json={
+                "series_ids": ["GDP"],
+                "analytics_types": ["volatility"],
+                "limit": 100,
+                "volatility_window": 30,
+            },
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["series_count"] == 1
+        assert data["volatility"] is not None
+        assert len(data["volatility"]) == 1
+        assert data["volatility"][0]["volatility"] == 0.05
+
+    @pytest.mark.asyncio
+    async def test_advanced_analytics_trends_success(
+        self,
+        async_client,
+        mock_spark_service,
+        mock_fred_service,
+        mock_spark_data_service,
+    ):
+        """Test advanced analytics endpoint with trend analysis."""
+        mock_spark_service.is_available.return_value = True
+        mock_responses = [
+            FREDDataResponse(
+                series_id="GDP",
+                series_info=FREDSeriesInfo(id="GDP", title="GDP"),
+                observations=[
+                    FREDObservation(date="2024-01-01", value=100.0),
+                    FREDObservation(date="2024-02-01", value=105.0),
+                    FREDObservation(date="2024-03-01", value=110.0),
+                ],
+                observation_count=3,
+            )
+        ]
+
+        mock_spark_data_service.batch_fetch_series = AsyncMock(
+            return_value=mock_responses
+        )
+        mock_df = MagicMock()
+        mock_df.schema = MagicMock()
+        mock_df.schema.__getitem__ = MagicMock(return_value=MagicMock(dataType=StringType()))
+        mock_df.count.return_value = 3
+        mock_spark_data_service.convert_to_dataframe.return_value = mock_df
+        mock_spark_data_service._prepare_dataframe_for_analytics.return_value = mock_df
+        mock_spark_data_service.analyze_trends.return_value = [
+            {
+                "series_id": "GDP",
+                "trend_type": "linear",
+                "slope": 5.0,
+                "intercept": 95.0,
+                "r_squared": 0.95,
+                "direction": "increasing",
+                "polynomial_degree": None,
+            }
+        ]
+
+        response = await async_client.post(
+            "/api/spark/advanced-analytics",
+            json={
+                "series_ids": ["GDP"],
+                "analytics_types": ["trends"],
+                "limit": 100,
+                "trend_type": "linear",
+            },
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["series_count"] == 1
+        assert data["trends"] is not None
+        assert len(data["trends"]) == 1
+        assert data["trends"][0]["trend_type"] == "linear"
+        assert data["trends"][0]["direction"] == "increasing"
+
+    @pytest.mark.asyncio
+    async def test_advanced_analytics_forecasts_success(
+        self,
+        async_client,
+        mock_spark_service,
+        mock_fred_service,
+        mock_spark_data_service,
+    ):
+        """Test advanced analytics endpoint with forecasting."""
+        mock_spark_service.is_available.return_value = True
+        mock_responses = [
+            FREDDataResponse(
+                series_id="GDP",
+                series_info=FREDSeriesInfo(id="GDP", title="GDP"),
+                observations=[
+                    FREDObservation(date="2024-01-01", value=100.0),
+                    FREDObservation(date="2024-02-01", value=105.0),
+                ],
+                observation_count=2,
+            )
+        ]
+
+        mock_spark_data_service.batch_fetch_series = AsyncMock(
+            return_value=mock_responses
+        )
+        mock_df = MagicMock()
+        mock_df.schema = MagicMock()
+        mock_df.schema.__getitem__ = MagicMock(return_value=MagicMock(dataType=StringType()))
+        mock_df.count.return_value = 2
+        mock_spark_data_service.convert_to_dataframe.return_value = mock_df
+        mock_spark_data_service._prepare_dataframe_for_analytics.return_value = mock_df
+        mock_spark_data_service.calculate_forecasts.return_value = [
+            {
+                "series_id": "GDP",
+                "date": "2024-03-01",
+                "forecasted_value": 110.0,
+                "lower_bound": 105.0,
+                "upper_bound": 115.0,
+                "confidence_level": 0.95,
+                "forecast_method": "linear_regression",
+            }
+        ]
+
+        response = await async_client.post(
+            "/api/spark/advanced-analytics",
+            json={
+                "series_ids": ["GDP"],
+                "analytics_types": ["forecasts"],
+                "limit": 100,
+                "forecast_horizon": 12,
+                "forecast_method": "linear_regression",
+            },
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["series_count"] == 1
+        assert data["forecasts"] is not None
+        assert len(data["forecasts"]) == 1
+        assert data["forecasts"][0]["forecast_method"] == "linear_regression"
+
+    @pytest.mark.asyncio
+    async def test_advanced_analytics_seasonal_decomposition_success(
+        self,
+        async_client,
+        mock_spark_service,
+        mock_fred_service,
+        mock_spark_data_service,
+    ):
+        """Test advanced analytics endpoint with seasonal decomposition."""
+        mock_spark_service.is_available.return_value = True
+        mock_responses = [
+            FREDDataResponse(
+                series_id="GDP",
+                series_info=FREDSeriesInfo(id="GDP", title="GDP"),
+                observations=[
+                    FREDObservation(date="2024-01-01", value=100.0),
+                    FREDObservation(date="2024-02-01", value=105.0),
+                ],
+                observation_count=2,
+            )
+        ]
+
+        mock_spark_data_service.batch_fetch_series = AsyncMock(
+            return_value=mock_responses
+        )
+        mock_df = MagicMock()
+        mock_df.schema = MagicMock()
+        mock_df.schema.__getitem__ = MagicMock(return_value=MagicMock(dataType=StringType()))
+        mock_df.count.return_value = 2
+        mock_spark_data_service.convert_to_dataframe.return_value = mock_df
+        mock_spark_data_service._prepare_dataframe_for_analytics.return_value = mock_df
+        mock_spark_data_service.decompose_seasonal.return_value = [
+            {
+                "series_id": "GDP",
+                "date": "2024-01-01",
+                "actual_value": 100.0,
+                "trend_component": 98.0,
+                "seasonal_component": 1.0,
+                "residual_component": 1.0,
+                "decomposition_type": "additive",
+            }
+        ]
+
+        response = await async_client.post(
+            "/api/spark/advanced-analytics",
+            json={
+                "series_ids": ["GDP"],
+                "analytics_types": ["seasonal_decomposition"],
+                "limit": 100,
+                "decomposition_type": "additive",
+                "seasonal_period": 12,
+            },
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["series_count"] == 1
+        assert data["seasonal_decompositions"] is not None
+        assert len(data["seasonal_decompositions"]) == 1
+        assert data["seasonal_decompositions"][0]["decomposition_type"] == "additive"
+
+    @pytest.mark.asyncio
+    async def test_advanced_analytics_missing_required_params(
+        self,
+        async_client,
+        mock_spark_service,
+        mock_fred_service,
+        mock_spark_data_service,
+    ):
+        """Test advanced analytics endpoint with missing required parameters."""
+        mock_spark_service.is_available.return_value = True
+
+        response = await async_client.post(
+            "/api/spark/advanced-analytics",
+            json={
+                "series_ids": ["GDP"],
+                "analytics_types": ["forecasts"],
+                "limit": 100,
+                # Missing forecast_horizon and forecast_method
+            },
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    @pytest.mark.asyncio
+    async def test_advanced_analytics_spark_unavailable(
+        self,
+        async_client,
+        mock_spark_service,
+        mock_fred_service,
+        mock_spark_data_service,
+    ):
+        """Test advanced analytics endpoint when Spark is unavailable."""
+        mock_spark_service.is_available.return_value = False
+
+        response = await async_client.post(
+            "/api/spark/advanced-analytics",
+            json={
+                "series_ids": ["GDP"],
+                "analytics_types": ["anomalies"],
+                "limit": 100,
+                "anomaly_method": "z_score",
+            },
+        )
+
+        assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+
+    @pytest.mark.asyncio
+    async def test_advanced_analytics_multiple_types(
+        self,
+        async_client,
+        mock_spark_service,
+        mock_fred_service,
+        mock_spark_data_service,
+    ):
+        """Test advanced analytics endpoint with multiple analytics types."""
+        mock_spark_service.is_available.return_value = True
+        mock_responses = [
+            FREDDataResponse(
+                series_id="GDP",
+                series_info=FREDSeriesInfo(id="GDP", title="GDP"),
+                observations=[
+                    FREDObservation(date="2024-01-01", value=100.0),
+                    FREDObservation(date="2024-02-01", value=105.0),
+                ],
+                observation_count=2,
+            )
+        ]
+
+        mock_spark_data_service.batch_fetch_series = AsyncMock(
+            return_value=mock_responses
+        )
+        mock_df = MagicMock()
+        mock_df.schema = MagicMock()
+        mock_df.schema.__getitem__ = MagicMock(return_value=MagicMock(dataType=StringType()))
+        mock_df.count.return_value = 2
+        mock_spark_data_service.convert_to_dataframe.return_value = mock_df
+        mock_spark_data_service._prepare_dataframe_for_analytics.return_value = mock_df
+        mock_spark_data_service.detect_anomalies.return_value = []
+        mock_spark_data_service.calculate_volatility.return_value = []
+        mock_spark_data_service.analyze_trends.return_value = [
+            {
+                "series_id": "GDP",
+                "trend_type": "linear",
+                "slope": 5.0,
+                "intercept": 95.0,
+                "r_squared": 0.95,
+                "direction": "increasing",
+                "polynomial_degree": None,
+            }
+        ]
+
+        response = await async_client.post(
+            "/api/spark/advanced-analytics",
+            json={
+                "series_ids": ["GDP"],
+                "analytics_types": ["anomalies", "volatility", "trends"],
+                "limit": 100,
+                "anomaly_method": "z_score",
+                "trend_type": "linear",
+                "volatility_window": 30,
+            },
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["series_count"] == 1
+        assert data["anomalies"] is not None
+        assert data["volatility"] is not None
+        assert data["trends"] is not None
+
+    @pytest.mark.asyncio
+    async def test_advanced_analytics_invalid_analytics_type(
+        self,
+        async_client,
+        mock_spark_service,
+        mock_fred_service,
+        mock_spark_data_service,
+    ):
+        """Test advanced analytics endpoint with invalid analytics type."""
+        mock_spark_service.is_available.return_value = True
+
+        response = await async_client.post(
+            "/api/spark/advanced-analytics",
+            json={
+                "series_ids": ["GDP"],
+                "analytics_types": ["invalid_type"],
+                "limit": 100,
+            },
+        )
+
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
