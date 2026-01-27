@@ -356,11 +356,15 @@ describe('AdvancedAnalyticsForm Component', () => {
     })
     
     const volatilityWindowInput = screen.getByLabelText(/rolling window size/i)
-    // Clear the input and paste the invalid value
-    await user.clear(volatilityWindowInput)
-    await user.click(volatilityWindowInput)
-    // Use paste to set the full value at once
-    await user.paste('400')
+    // Use fireEvent.change to directly set the value to 400
+    // This will trigger the onChange handler: setVolatilityWindow(parseInt('400') || 30) = 400
+    fireEvent.change(volatilityWindowInput, { target: { value: '400' } })
+    
+    // Wait for React to process the state update
+    await waitFor(() => {
+      // Check that the input has the new value (though this might not be necessary)
+      expect(volatilityWindowInput.value).toBe('400')
+    }, { timeout: 1000 })
     
     // Fill in required field
     await user.type(screen.getByLabelText(/series ids/i), 'GDP')
