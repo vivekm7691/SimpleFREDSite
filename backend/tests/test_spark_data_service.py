@@ -1403,7 +1403,7 @@ class TestSparkDataServiceModelCaching:
         
         mock_filtered.select.return_value.collect.return_value = mock_data_rows
         
-        with patch("app.services.spark_data_service.joblib.load", return_value=MockModel()):
+        with patch("joblib.load", return_value=MockModel()):
             result = spark_data_service.calculate_forecasts(
                 mock_df, forecast_horizon=3, forecast_method="arima"
             )
@@ -1449,7 +1449,7 @@ class TestSparkDataServiceModelCaching:
         # Mock pmdarima (imported inside the function, so patch where it's used)
         with patch("pmdarima.auto_arima") as mock_auto_arima, \
              patch("pandas.Series") as mock_pd_series, \
-             patch("app.services.spark_data_service.joblib.dump") as mock_joblib_dump:
+             patch("joblib.dump") as mock_joblib_dump:
             
             # Mock auto_arima to return a model with predict method
             class MockARIMAModel:

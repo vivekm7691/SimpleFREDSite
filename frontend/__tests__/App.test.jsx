@@ -459,7 +459,9 @@ describe('App Component', () => {
       expect(analyticsButtons.length).toBeGreaterThan(0)
     })
 
-    const analyticsTab = screen.getByRole('button', { name: /analytics/i })
+    const analyticsButtons = screen.getAllByRole('button', { name: /analytics/i })
+    const analyticsTab = analyticsButtons.find(btn => btn.textContent === 'Analytics')
+    expect(analyticsTab).toBeInTheDocument()
     await user.click(analyticsTab)
 
     await waitFor(() => {
@@ -530,7 +532,9 @@ describe('App Component', () => {
       expect(analyticsButtons.length).toBeGreaterThan(0)
     })
 
-    const analyticsTab = screen.getByRole('button', { name: /analytics/i })
+    const analyticsButtons = screen.getAllByRole('button', { name: /analytics/i })
+    const analyticsTab = analyticsButtons.find(btn => btn.textContent === 'Analytics')
+    expect(analyticsTab).toBeInTheDocument()
     await user.click(analyticsTab)
 
     await waitFor(() => {

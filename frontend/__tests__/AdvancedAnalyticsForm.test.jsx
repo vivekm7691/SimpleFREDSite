@@ -148,7 +148,7 @@ describe('AdvancedAnalyticsForm Component', () => {
     const user = userEvent.setup()
     render(<AdvancedAnalyticsForm onSubmit={mockOnSubmit} />)
     
-    await user.click(screen.getByLabelText(/seasonal decomposition/i))
+    await user.click(screen.getByText(/seasonal decomposition/i))
     
     await waitFor(() => {
       expect(screen.getByText(/decomposition type/i)).toBeInTheDocument()
@@ -328,7 +328,7 @@ describe('AdvancedAnalyticsForm Component', () => {
     const user = userEvent.setup()
     render(<AdvancedAnalyticsForm onSubmit={mockOnSubmit} />)
     
-    await user.click(screen.getByLabelText(/seasonal decomposition/i))
+    await user.click(screen.getByText(/seasonal decomposition/i))
     
     const seasonalPeriodInput = screen.getByLabelText(/seasonal period/i)
     fireEvent.change(seasonalPeriodInput, { target: { value: '0' } })
@@ -360,7 +360,7 @@ describe('AdvancedAnalyticsForm Component', () => {
     await user.click(submitButton)
     
     await waitFor(() => {
-      expect(screen.getByText(/volatility window must be positive/i)).toBeInTheDocument()
+      expect(screen.getByText(/volatility window must be between/i)).toBeInTheDocument()
     })
     
     expect(mockOnSubmit).not.toHaveBeenCalled()

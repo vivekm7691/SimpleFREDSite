@@ -723,10 +723,7 @@ async def perform_advanced_analytics(request: AdvancedAnalyticsRequest):
                 )
 
         if "seasonal_decomposition" in request.analytics_types:
-            if (
-                not request.decomposition_type
-                or not request.seasonal_period
-            ):
+            if not request.decomposition_type or not request.seasonal_period:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="decomposition_type and seasonal_period are required when 'seasonal_decomposition' is in analytics_types",

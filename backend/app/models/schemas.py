@@ -391,9 +391,7 @@ class Anomaly(BaseModel):
         ...,
         description="Detection method: 'z_score', 'iqr', or 'moving_average'",
     )
-    severity: str = Field(
-        ..., description="Severity level: 'low', 'medium', or 'high'"
-    )
+    severity: str = Field(..., description="Severity level: 'low', 'medium', or 'high'")
 
 
 class Trend(BaseModel):
@@ -404,9 +402,7 @@ class Trend(BaseModel):
         ..., description="Type of trend: 'linear', 'polynomial', or 'none'"
     )
     slope: Optional[float] = Field(None, description="Slope for linear trends")
-    intercept: Optional[float] = Field(
-        None, description="Intercept for linear trends"
-    )
+    intercept: Optional[float] = Field(None, description="Intercept for linear trends")
     r_squared: float = Field(
         ..., ge=0.0, le=1.0, description="R-squared value (trend strength)"
     )
@@ -537,9 +533,7 @@ class AdvancedAnalyticsRequest(BaseModel):
             if not series_id.strip():
                 raise ValueError("Series ID cannot be empty")
             if not series_id.replace("_", "").replace("-", "").isalnum():
-                raise ValueError(
-                    f"Series ID '{series_id}' contains invalid characters"
-                )
+                raise ValueError(f"Series ID '{series_id}' contains invalid characters")
             validated.append(series_id.strip().upper())
         return validated
 
@@ -566,12 +560,8 @@ class AdvancedAnalyticsResponse(BaseModel):
     """Response model for advanced analytics operations."""
 
     series_count: int = Field(..., description="Number of series analyzed")
-    forecasts: Optional[List[Forecast]] = Field(
-        None, description="Forecasted values"
-    )
-    anomalies: Optional[List[Anomaly]] = Field(
-        None, description="Detected anomalies"
-    )
+    forecasts: Optional[List[Forecast]] = Field(None, description="Forecasted values")
+    anomalies: Optional[List[Anomaly]] = Field(None, description="Detected anomalies")
     trends: Optional[List[Trend]] = Field(None, description="Trend analysis results")
     seasonal_decompositions: Optional[List[SeasonalDecomposition]] = Field(
         None, description="Seasonal decomposition results"

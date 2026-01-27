@@ -1079,9 +1079,7 @@ class SparkDataService:
                     severity = (
                         "high"
                         if deviation > threshold * 2
-                        else "medium"
-                        if deviation > threshold * 1.5
-                        else "low"
+                        else "medium" if deviation > threshold * 1.5 else "low"
                     )
 
                     results.append(
@@ -1098,9 +1096,7 @@ class SparkDataService:
 
             elif method == "iqr":
                 # Calculate quartiles
-                quantiles = series_df.approxQuantile(
-                    "value", [0.25, 0.5, 0.75], 0.0
-                )
+                quantiles = series_df.approxQuantile("value", [0.25, 0.5, 0.75], 0.0)
 
                 if len(quantiles) != 3 or None in quantiles:
                     continue
@@ -1127,9 +1123,7 @@ class SparkDataService:
                     severity = (
                         "high"
                         if deviation_from_median > 3
-                        else "medium"
-                        if deviation_from_median > 2
-                        else "low"
+                        else "medium" if deviation_from_median > 2 else "low"
                     )
 
                     results.append(
@@ -1175,13 +1169,13 @@ class SparkDataService:
                     if value is None or ma_val is None or ma_std_val is None:
                         continue
 
-                    deviation = abs(value - ma_val) / ma_std_val if ma_std_val > 0 else 0
+                    deviation = (
+                        abs(value - ma_val) / ma_std_val if ma_std_val > 0 else 0
+                    )
                     severity = (
                         "high"
                         if deviation > threshold * 2
-                        else "medium"
-                        if deviation > threshold * 1.5
-                        else "low"
+                        else "medium" if deviation > threshold * 1.5 else "low"
                     )
 
                     results.append(
@@ -1231,7 +1225,8 @@ class SparkDataService:
 
             # Calculate period returns: (value_t - value_{t-1}) / value_{t-1}
             series_df = series_df.withColumn(
-                "prev_value", lag("value", 1).over(Window.partitionBy("series_id").orderBy("date"))
+                "prev_value",
+                lag("value", 1).over(Window.partitionBy("series_id").orderBy("date")),
             ).withColumn(
                 "return",
                 when(
@@ -1346,9 +1341,7 @@ class SparkDataService:
 
             # Extract values and row numbers
             values = [
-                float(row["value"])
-                for row in data_rows
-                if row["value"] is not None
+                float(row["value"]) for row in data_rows if row["value"] is not None
             ]
             row_nums = [
                 float(row["row_num"])
@@ -1391,13 +1384,14 @@ class SparkDataService:
                 y_mean = sum_y / n
                 ss_tot = sum((y - y_mean) ** 2 for y in values)
                 ss_res = sum(
-                    (y - (slope * x + intercept)) ** 2
-                    for x, y in zip(row_nums, values)
+                    (y - (slope * x + intercept)) ** 2 for x, y in zip(row_nums, values)
                 )
                 r_squared = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0.0
 
                 direction = (
-                    "increasing" if slope > 0.01 else "decreasing" if slope < -0.01 else "stable"
+                    "increasing"
+                    if slope > 0.01
+                    else "decreasing" if slope < -0.01 else "stable"
                 )
 
                 results.append(
@@ -1428,13 +1422,14 @@ class SparkDataService:
                 y_mean = sum_y / n
                 ss_tot = sum((y - y_mean) ** 2 for y in values)
                 ss_res = sum(
-                    (y - (slope * x + intercept)) ** 2
-                    for x, y in zip(row_nums, values)
+                    (y - (slope * x + intercept)) ** 2 for x, y in zip(row_nums, values)
                 )
                 r_squared = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0.0
 
                 direction = (
-                    "increasing" if slope > 0.01 else "decreasing" if slope < -0.01 else "stable"
+                    "increasing"
+                    if slope > 0.01
+                    else "decreasing" if slope < -0.01 else "stable"
                 )
 
                 results.append(
@@ -1494,7 +1489,10 @@ class SparkDataService:
                 continue
 
             # Extract values
-            values = [float(row["value"]) if row["value"] is not None else None for row in data_rows]
+            values = [
+                float(row["value"]) if row["value"] is not None else None
+                for row in data_rows
+            ]
             dates = [row["date"] for row in data_rows]
 
             # Simple moving average for trend (using seasonal_period as window)
@@ -1534,9 +1532,7 @@ class SparkDataService:
                 if decomposition_type == "additive":
                     residual = values[i] - trend - seasonal
                 else:  # multiplicative
-                    residual = (
-                        values[i] / (trend * (1 + seasonal)) if trend != 0 else 0
-                    )
+                    residual = values[i] / (trend * (1 + seasonal)) if trend != 0 else 0
 
                 residual_values.append(residual)
 
@@ -1548,9 +1544,19 @@ class SparkDataService:
                             "series_id": series_id,
                             "date": date.strftime("%Y-%m-%d"),
                             "actual_value": value,
-                            "trend_component": trend_values[i] if trend_values[i] is not None else 0.0,
-                            "seasonal_component": seasonal_values[i] if seasonal_values[i] is not None else 0.0,
-                            "residual_component": residual_values[i] if residual_values[i] is not None else 0.0,
+                            "trend_component": (
+                                trend_values[i] if trend_values[i] is not None else 0.0
+                            ),
+                            "seasonal_component": (
+                                seasonal_values[i]
+                                if seasonal_values[i] is not None
+                                else 0.0
+                            ),
+                            "residual_component": (
+                                residual_values[i]
+                                if residual_values[i] is not None
+                                else 0.0
+                            ),
                             "decomposition_type": decomposition_type,
                         }
                     )
@@ -1600,9 +1606,7 @@ class SparkDataService:
 
             # Extract values and dates
             values = [
-                float(row["value"])
-                for row in data_rows
-                if row["value"] is not None
+                float(row["value"]) for row in data_rows if row["value"] is not None
             ]
             dates = [row["date"] for row in data_rows if row["value"] is not None]
 
@@ -1633,8 +1637,7 @@ class SparkDataService:
                 # Calculate standard error for confidence intervals
                 y_mean = sum_y / n
                 ss_res = sum(
-                    (y - (slope * x + intercept)) ** 2
-                    for x, y in zip(row_nums, values)
+                    (y - (slope * x + intercept)) ** 2 for x, y in zip(row_nums, values)
                 )
                 std_error = (ss_res / (n - 2)) ** 0.5 if n > 2 else 0.0
 
@@ -1642,11 +1645,25 @@ class SparkDataService:
                 from datetime import timedelta
 
                 for i in range(1, forecast_horizon + 1):
-                    forecast_date = last_date + timedelta(days=30 * i)  # Approximate monthly
+                    forecast_date = last_date + timedelta(
+                        days=30 * i
+                    )  # Approximate monthly
                     forecast_value = slope * (n + i) + intercept
 
                     # Simple confidence interval (95%)
-                    confidence_interval = 1.96 * std_error * (1 + 1/n + ((n + i - y_mean) ** 2) / sum((x - y_mean) ** 2 for x in row_nums)) ** 0.5 if n > 2 else std_error
+                    confidence_interval = (
+                        1.96
+                        * std_error
+                        * (
+                            1
+                            + 1 / n
+                            + ((n + i - y_mean) ** 2)
+                            / sum((x - y_mean) ** 2 for x in row_nums)
+                        )
+                        ** 0.5
+                        if n > 2
+                        else std_error
+                    )
 
                     results.append(
                         {
@@ -1700,7 +1717,9 @@ class SparkDataService:
                     )
                     model = None
 
-                    if self._is_model_cached(series_id, forecast_horizon, forecast_method):
+                    if self._is_model_cached(
+                        series_id, forecast_horizon, forecast_method
+                    ):
                         try:
                             logger.info(
                                 f"Loading cached ARIMA model for {series_id} from {model_cache_path}"
@@ -1744,9 +1763,7 @@ class SparkDataService:
 
                     from datetime import timedelta
 
-                    for i, (fcst, (lower, upper)) in enumerate(
-                        zip(forecast, conf_int)
-                    ):
+                    for i, (fcst, (lower, upper)) in enumerate(zip(forecast, conf_int)):
                         forecast_date = last_date + timedelta(days=30 * (i + 1))
 
                         results.append(
