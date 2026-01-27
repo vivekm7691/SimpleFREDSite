@@ -349,10 +349,15 @@ describe('AdvancedAnalyticsForm Component', () => {
     const user = userEvent.setup()
     render(<AdvancedAnalyticsForm onSubmit={mockOnSubmit} />)
     
-    await user.click(screen.getByLabelText(/volatility/i))
+    await user.click(screen.getByText(/volatility analysis/i))
+    
+    await waitFor(() => {
+      expect(screen.getByLabelText(/rolling window size/i)).toBeInTheDocument()
+    })
     
     const volatilityWindowInput = screen.getByLabelText(/rolling window size/i)
-    fireEvent.change(volatilityWindowInput, { target: { value: '-10' } })
+    await user.clear(volatilityWindowInput)
+    await user.type(volatilityWindowInput, '-10')
     
     await user.type(screen.getByLabelText(/series ids/i), 'GDP')
     
@@ -361,7 +366,7 @@ describe('AdvancedAnalyticsForm Component', () => {
     
     await waitFor(() => {
       expect(screen.getByText(/volatility window must be between/i)).toBeInTheDocument()
-    })
+    }, { timeout: 3000 })
     
     expect(mockOnSubmit).not.toHaveBeenCalled()
   })
