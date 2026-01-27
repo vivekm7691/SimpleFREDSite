@@ -356,20 +356,19 @@ describe('AdvancedAnalyticsForm Component', () => {
     })
     
     const volatilityWindowInput = screen.getByLabelText(/rolling window size/i)
-    // Clear and type the invalid value
+    // Clear the input and paste the invalid value
     await user.clear(volatilityWindowInput)
-    await user.type(volatilityWindowInput, '400')
+    await user.click(volatilityWindowInput)
+    // Use paste to set the full value at once
+    await user.paste('400')
     
-    // Wait for state to update
-    await waitFor(() => {
-      expect(volatilityWindowInput).toHaveValue(400)
-    })
-    
+    // Fill in required field
     await user.type(screen.getByLabelText(/series ids/i), 'GDP')
     
     const submitButton = screen.getByRole('button', { name: /run advanced analytics/i })
     await user.click(submitButton)
     
+    // The validation should catch the invalid value (400 > 365)
     await waitFor(() => {
       expect(screen.getByText(/volatility window must be between/i)).toBeInTheDocument()
     }, { timeout: 3000 })
