@@ -9,7 +9,7 @@ describe('AnomaliesView Component', () => {
   test('renders empty state when no data', () => {
     render(<AnomaliesView data={[]} />)
     
-    expect(screen.getByRole('heading', { name: /anomaly detection/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /anomalies/i })).toBeInTheDocument()
     expect(screen.getByText(/no anomalies detected/i)).toBeInTheDocument()
   })
 
