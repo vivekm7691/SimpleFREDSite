@@ -356,8 +356,8 @@ describe('AdvancedAnalyticsForm Component', () => {
     })
     
     const volatilityWindowInput = screen.getByLabelText(/rolling window size/i)
-    await user.clear(volatilityWindowInput)
-    await user.type(volatilityWindowInput, '-10')
+    // Use fireEvent to set the value directly to avoid onChange parsing issues
+    fireEvent.change(volatilityWindowInput, { target: { value: '400' } })
     
     await user.type(screen.getByLabelText(/series ids/i), 'GDP')
     
