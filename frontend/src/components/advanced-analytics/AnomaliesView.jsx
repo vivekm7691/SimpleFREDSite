@@ -79,8 +79,9 @@ function AnomaliesView({ data }) {
       <div className="advanced-analytics-header">
         <h3>Anomaly Detection</h3>
         <div className="filter-controls">
-          <label>Filter by severity:</label>
+          <label htmlFor="severity-filter">Filter by severity:</label>
           <select
+            id="severity-filter"
             value={severityFilter}
             onChange={(e) => setSeverityFilter(e.target.value)}
           >
@@ -91,8 +92,9 @@ function AnomaliesView({ data }) {
               </option>
             ))}
           </select>
-          <label>Filter by method:</label>
+          <label htmlFor="method-filter">Filter by method:</label>
           <select
+            id="method-filter"
             value={methodFilter}
             onChange={(e) => setMethodFilter(e.target.value)}
           >

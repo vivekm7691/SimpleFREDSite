@@ -1230,10 +1230,6 @@ class SparkDataService:
             series_df = df.filter(col("series_id") == series_id).orderBy("date")
 
             # Calculate period returns: (value_t - value_{t-1}) / value_{t-1}
-            window_spec = (
-                Window.partitionBy("series_id").orderBy("date").rowsBetween(-1, -1)
-            )
-
             series_df = series_df.withColumn(
                 "prev_value", lag("value", 1).over(Window.partitionBy("series_id").orderBy("date"))
             ).withColumn(
@@ -1380,7 +1376,6 @@ class SparkDataService:
             sum_y = sum(values)
             sum_xy = sum(x * y for x, y in zip(row_nums, values))
             sum_x2 = sum(x * x for x in row_nums)
-            sum_y2 = sum(y * y for y in values)
 
             if trend_type == "linear":
                 # Calculate slope and intercept
@@ -1531,7 +1526,6 @@ class SparkDataService:
 
                 # Calculate seasonal component (simplified)
                 # In production, use proper seasonal decomposition
-                seasonal_idx = i % seasonal_period
                 seasonal = 0.0  # Simplified - would need proper seasonal calculation
 
                 seasonal_values.append(seasonal)
@@ -1696,7 +1690,6 @@ class SparkDataService:
                 try:
                     import pmdarima as pm
                     import pandas as pd
-                    import joblib
 
                     # Convert to pandas Series
                     ts = pd.Series(values, index=dates)

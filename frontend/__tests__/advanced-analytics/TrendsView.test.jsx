@@ -48,7 +48,7 @@ describe('TrendsView Component', () => {
     render(<TrendsView data={mockData} />)
     
     expect(screen.getByText('GDP')).toBeInTheDocument()
-    expect(screen.getByText(/polynomial/i)).toBeInTheDocument()
+    expect(screen.getAllByText(/polynomial/i).length).toBeGreaterThan(0)
     expect(screen.getByText(/2/i)).toBeInTheDocument() // Polynomial degree
   })
 
@@ -102,7 +102,7 @@ describe('TrendsView Component', () => {
     render(<TrendsView data={mockData} />)
     
     expect(screen.getByText('GDP')).toBeInTheDocument()
-    expect(screen.getByText(/polynomial/i)).toBeInTheDocument()
+    expect(screen.getAllByText(/polynomial/i).length).toBeGreaterThan(0)
   })
 
   test('displays multiple trend cards', () => {

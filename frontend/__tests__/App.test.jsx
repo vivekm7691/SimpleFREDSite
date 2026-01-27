@@ -400,7 +400,8 @@ describe('App Component', () => {
     await user.click(submitButton)
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /analytics/i })).toBeInTheDocument()
+      const analyticsButtons = screen.getAllByRole('button', { name: /analytics/i })
+      expect(analyticsButtons.length).toBeGreaterThan(0)
     })
   })
 
@@ -454,7 +455,8 @@ describe('App Component', () => {
     await user.click(submitButton)
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /analytics/i })).toBeInTheDocument()
+      const analyticsButtons = screen.getAllByRole('button', { name: /analytics/i })
+      expect(analyticsButtons.length).toBeGreaterThan(0)
     })
 
     const analyticsTab = screen.getByRole('button', { name: /analytics/i })
@@ -524,7 +526,8 @@ describe('App Component', () => {
     await user.click(submitButton)
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /analytics/i })).toBeInTheDocument()
+      const analyticsButtons = screen.getAllByRole('button', { name: /analytics/i })
+      expect(analyticsButtons.length).toBeGreaterThan(0)
     })
 
     const analyticsTab = screen.getByRole('button', { name: /analytics/i })

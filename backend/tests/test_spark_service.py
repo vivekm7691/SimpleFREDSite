@@ -16,7 +16,7 @@ class TestSparkServiceInitialization:
 
     @patch("app.services.spark_service.SparkSession")
     @patch("app.services.spark_service.SparkConf")
-    @patch("app.services.spark_service.multiprocessing.cpu_count")
+    @patch("multiprocessing.cpu_count")
     def test_initialize_spark_default_config(self, mock_cpu_count, mock_conf_class, mock_session_class):
         """Test Spark initialization with default configuration."""
         mock_cpu_count.return_value = 4
@@ -65,7 +65,7 @@ class TestSparkServiceInitialization:
 
     @patch("app.services.spark_service.SparkSession")
     @patch("app.services.spark_service.SparkConf")
-    @patch("app.services.spark_service.multiprocessing.cpu_count")
+    @patch("multiprocessing.cpu_count")
     def test_initialize_spark_custom_env_vars(self, mock_cpu_count, mock_conf_class, mock_session_class):
         """Test Spark initialization with custom environment variables."""
         mock_cpu_count.return_value = 8

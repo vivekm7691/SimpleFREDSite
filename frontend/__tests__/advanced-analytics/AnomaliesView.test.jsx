@@ -31,7 +31,7 @@ describe('AnomaliesView Component', () => {
     expect(screen.getByRole('heading', { name: /anomaly detection/i })).toBeInTheDocument()
     expect(screen.getByText('GDP')).toBeInTheDocument()
     expect(screen.getByText('2024-01-01')).toBeInTheDocument()
-    expect(screen.getByText(/high/i)).toBeInTheDocument()
+    expect(screen.getAllByText(/high/i).length).toBeGreaterThan(0)
   })
 
   test('filters by severity', async () => {

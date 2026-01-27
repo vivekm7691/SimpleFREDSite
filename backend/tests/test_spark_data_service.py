@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, AsyncMock, patch, mock_open
 from pathlib import Path
 from datetime import date
 import os
+import numpy as np
 
 from app.services.spark_data_service import SparkDataService
 from app.models.schemas import FREDDataResponse, FREDSeriesInfo, FREDObservation
@@ -956,9 +957,12 @@ class TestSparkDataServiceAdvancedAnalytics:
             mock_anomaly_row
         ]
 
-        with patch(
-            "app.services.spark_data_service.col", return_value=MagicMock()
-        ), patch(
+        # Mock col() to support comparison operations
+        mock_col = MagicMock()
+        mock_col.__gt__ = MagicMock(return_value=MagicMock())
+        mock_col.__lt__ = MagicMock(return_value=MagicMock())
+        
+        with patch("app.services.spark_data_service.col", return_value=mock_col), patch(
             "app.services.spark_data_service.avg", return_value=MagicMock()
         ), patch(
             "app.services.spark_data_service.stddev", return_value=MagicMock()
@@ -1004,7 +1008,12 @@ class TestSparkDataServiceAdvancedAnalytics:
             mock_anomaly_row
         ]
 
-        with patch("app.services.spark_data_service.col", return_value=MagicMock()):
+        # Mock col() to support comparison operations
+        mock_col = MagicMock()
+        mock_col.__gt__ = MagicMock(return_value=MagicMock())
+        mock_col.__lt__ = MagicMock(return_value=MagicMock())
+        
+        with patch("app.services.spark_data_service.col", return_value=mock_col):
             result = spark_data_service.detect_anomalies(mock_df, method="iqr")
 
             assert mock_df.filter.called
@@ -1322,7 +1331,9 @@ class TestSparkDataServiceModelCaching:
         joblib.dump(mock_model, model_file)
         
         loaded_model = spark_data_service._load_model_from_cache("GDP", 12, "arima")
-        assert loaded_model == mock_model
+        # Compare dict keys and values separately to avoid numpy array comparison issues
+        assert loaded_model["order"] == mock_model["order"]
+        assert np.array_equal(loaded_model["data"], mock_model["data"])
 
     def test_save_model_to_cache(self, spark_data_service, tmp_path):
         """Test saving model to cache."""
@@ -1339,7 +1350,9 @@ class TestSparkDataServiceModelCaching:
         
         # Verify we can load it back
         loaded_model = joblib.load(model_file)
-        assert loaded_model == mock_model
+        # Compare dict keys and values separately to avoid numpy array comparison issues
+        assert loaded_model["order"] == mock_model["order"]
+        assert np.array_equal(loaded_model["data"], mock_model["data"])
 
     def test_calculate_forecasts_arima_with_cache(self, spark_data_service):
         """Test ARIMA forecasting with cached model."""
@@ -1353,13 +1366,14 @@ class TestSparkDataServiceModelCaching:
         model_cache_dir.mkdir(parents=True, exist_ok=True)
         model_file = model_cache_dir / "GDP_12_arima.pkl"
         
-        # Create a mock ARIMA model
-        mock_model = MagicMock()
-        mock_forecast = np.array([110.0, 115.0, 120.0])
-        mock_conf_int = np.array([[105.0, 115.0], [110.0, 120.0], [115.0, 125.0]])
-        mock_model.predict.return_value = (mock_forecast, mock_conf_int)
-        
-        joblib.dump(mock_model, model_file)
+        # Don't actually dump MagicMock, instead mock the load
+        # Create a callable mock that returns the forecast
+        class MockModel:
+            def predict(self, n_periods, return_conf_int=True):
+                return (
+                    np.array([110.0, 115.0, 120.0]),
+                    np.array([[105.0, 115.0], [110.0, 120.0], [115.0, 125.0]])
+                )
         
         # Create mock DataFrame
         mock_df = MagicMock()
@@ -1389,8 +1403,7 @@ class TestSparkDataServiceModelCaching:
         
         mock_filtered.select.return_value.collect.return_value = mock_data_rows
         
-        with patch("app.services.spark_data_service.joblib") as mock_joblib:
-            mock_joblib.load.return_value = mock_model
+        with patch("app.services.spark_data_service.joblib.load", return_value=MockModel()):
             result = spark_data_service.calculate_forecasts(
                 mock_df, forecast_horizon=3, forecast_method="arima"
             )
@@ -1433,28 +1446,30 @@ class TestSparkDataServiceModelCaching:
         
         mock_filtered.select.return_value.collect.return_value = mock_data_rows
         
-        # Mock pmdarima
-        with patch("app.services.spark_data_service.pmdarima") as mock_pm, \
-             patch("app.services.spark_data_service.pd") as mock_pd, \
-             patch("app.services.spark_data_service.joblib") as mock_joblib:
+        # Mock pmdarima (imported inside the function, so patch where it's used)
+        with patch("pmdarima.auto_arima") as mock_auto_arima, \
+             patch("pandas.Series") as mock_pd_series, \
+             patch("app.services.spark_data_service.joblib.dump") as mock_joblib_dump:
             
-            # Mock auto_arima
-            mock_model = MagicMock()
-            mock_forecast = MagicMock()
-            mock_forecast.__iter__ = lambda self: iter([110.0, 115.0, 120.0])
-            mock_conf_int = [(105.0, 115.0), (110.0, 120.0), (115.0, 125.0)]
-            mock_model.predict.return_value = (mock_forecast, mock_conf_int)
-            mock_pm.auto_arima.return_value = mock_model
+            # Mock auto_arima to return a model with predict method
+            class MockARIMAModel:
+                def predict(self, n_periods, return_conf_int=True):
+                    forecast = np.array([110.0, 115.0, 120.0])
+                    conf_int = np.array([[105.0, 115.0], [110.0, 120.0], [115.0, 125.0]])
+                    return forecast, conf_int
+            
+            mock_arima_model = MockARIMAModel()
+            mock_auto_arima.return_value = mock_arima_model
             
             # Mock pandas Series
             mock_series = MagicMock()
-            mock_pd.Series.return_value = mock_series
+            mock_pd_series.return_value = mock_series
             
             result = spark_data_service.calculate_forecasts(
                 mock_df, forecast_horizon=3, forecast_method="arima"
             )
             
             # Verify model was fitted (auto_arima was called)
-            mock_pm.auto_arima.assert_called_once()
+            mock_auto_arima.assert_called_once()
             # Verify model was saved to cache
-            mock_joblib.dump.assert_called_once()
+            mock_joblib_dump.assert_called_once()

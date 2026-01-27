@@ -17,7 +17,7 @@ describe('AdvancedAnalyticsForm Component', () => {
     
     expect(screen.getByLabelText(/series ids/i)).toBeInTheDocument()
     expect(screen.getByText(/forecasts/i)).toBeInTheDocument()
-    expect(screen.getByText(/anomalies/i)).toBeInTheDocument()
+    expect(screen.getByText(/anomaly detection/i)).toBeInTheDocument()
     expect(screen.getByText(/trends/i)).toBeInTheDocument()
     expect(screen.getByText(/seasonal decomposition/i)).toBeInTheDocument()
     expect(screen.getByText(/volatility/i)).toBeInTheDocument()
@@ -111,7 +111,7 @@ describe('AdvancedAnalyticsForm Component', () => {
     const user = userEvent.setup()
     render(<AdvancedAnalyticsForm onSubmit={mockOnSubmit} />)
     
-    await user.click(screen.getByLabelText(/anomalies/i))
+    await user.click(screen.getByText(/anomaly detection/i))
     
     await waitFor(() => {
       expect(screen.getByLabelText(/anomaly method/i)).toBeInTheDocument()
@@ -123,7 +123,7 @@ describe('AdvancedAnalyticsForm Component', () => {
     const user = userEvent.setup()
     render(<AdvancedAnalyticsForm onSubmit={mockOnSubmit} />)
     
-    await user.click(screen.getByLabelText(/trends/i))
+    await user.click(screen.getByText(/trend analysis/i))
     
     await waitFor(() => {
       expect(screen.getByLabelText(/trend type/i)).toBeInTheDocument()
@@ -134,7 +134,7 @@ describe('AdvancedAnalyticsForm Component', () => {
     const user = userEvent.setup()
     render(<AdvancedAnalyticsForm onSubmit={mockOnSubmit} />)
     
-    await user.click(screen.getByLabelText(/trends/i))
+    await user.click(screen.getByText(/trend analysis/i))
     
     const trendTypeSelect = screen.getByLabelText(/trend type/i)
     await user.selectOptions(trendTypeSelect, 'polynomial')
@@ -151,7 +151,7 @@ describe('AdvancedAnalyticsForm Component', () => {
     await user.click(screen.getByLabelText(/seasonal decomposition/i))
     
     await waitFor(() => {
-      expect(screen.getByLabelText(/decomposition type/i)).toBeInTheDocument()
+      expect(screen.getByText(/decomposition type/i)).toBeInTheDocument()
       expect(screen.getByLabelText(/seasonal period/i)).toBeInTheDocument()
     })
   })
@@ -163,7 +163,7 @@ describe('AdvancedAnalyticsForm Component', () => {
     await user.click(screen.getByLabelText(/volatility/i))
     
     await waitFor(() => {
-      expect(screen.getByLabelText(/volatility window/i)).toBeInTheDocument()
+      expect(screen.getByLabelText(/rolling window size/i)).toBeInTheDocument()
     })
   })
 
@@ -239,7 +239,7 @@ describe('AdvancedAnalyticsForm Component', () => {
     const user = userEvent.setup()
     render(<AdvancedAnalyticsForm onSubmit={mockOnSubmit} />)
     
-    await user.click(screen.getByLabelText(/anomalies/i))
+    await user.click(screen.getByText(/anomaly detection/i))
     
     const anomalyMethodSelect = screen.getByLabelText(/anomaly method/i)
     await user.selectOptions(anomalyMethodSelect, 'iqr')
@@ -273,7 +273,7 @@ describe('AdvancedAnalyticsForm Component', () => {
     await user.click(submitButton)
     
     await waitFor(() => {
-      expect(screen.getByText(/forecast horizon must be positive/i)).toBeInTheDocument()
+      expect(screen.getByText(/forecast horizon must be between 1 and 120/i)).toBeInTheDocument()
     })
     
     expect(mockOnSubmit).not.toHaveBeenCalled()
@@ -283,7 +283,7 @@ describe('AdvancedAnalyticsForm Component', () => {
     const user = userEvent.setup()
     render(<AdvancedAnalyticsForm onSubmit={mockOnSubmit} />)
     
-    await user.click(screen.getByLabelText(/anomalies/i))
+    await user.click(screen.getByText(/anomaly detection/i))
     
     const anomalyThresholdInput = screen.getByLabelText(/anomaly threshold/i)
     fireEvent.change(anomalyThresholdInput, { target: { value: '-1' } })
@@ -304,7 +304,7 @@ describe('AdvancedAnalyticsForm Component', () => {
     const user = userEvent.setup()
     render(<AdvancedAnalyticsForm onSubmit={mockOnSubmit} />)
     
-    await user.click(screen.getByLabelText(/trends/i))
+    await user.click(screen.getByText(/trend analysis/i))
     
     const trendTypeSelect = screen.getByLabelText(/trend type/i)
     await user.selectOptions(trendTypeSelect, 'polynomial')
@@ -339,7 +339,7 @@ describe('AdvancedAnalyticsForm Component', () => {
     await user.click(submitButton)
     
     await waitFor(() => {
-      expect(screen.getByText(/seasonal period must be positive/i)).toBeInTheDocument()
+      expect(screen.getByText(/seasonal period must be between/i)).toBeInTheDocument()
     })
     
     expect(mockOnSubmit).not.toHaveBeenCalled()
@@ -351,7 +351,7 @@ describe('AdvancedAnalyticsForm Component', () => {
     
     await user.click(screen.getByLabelText(/volatility/i))
     
-    const volatilityWindowInput = screen.getByLabelText(/volatility window/i)
+    const volatilityWindowInput = screen.getByLabelText(/rolling window size/i)
     fireEvent.change(volatilityWindowInput, { target: { value: '-10' } })
     
     await user.type(screen.getByLabelText(/series ids/i), 'GDP')

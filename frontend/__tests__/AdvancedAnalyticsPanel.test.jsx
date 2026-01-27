@@ -53,7 +53,7 @@ describe('AdvancedAnalyticsPanel Component', () => {
     render(<AdvancedAnalyticsPanel />)
     
     expect(screen.getByText(/advanced analytics dashboard/i)).toBeInTheDocument()
-    expect(screen.getByText(/perform advanced time-series analysis/i)).toBeInTheDocument()
+    expect(screen.getByText(/perform advanced analytics including forecasting/i)).toBeInTheDocument()
   })
 
   test('renders advanced analytics form', () => {
