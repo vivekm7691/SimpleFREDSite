@@ -1,7 +1,7 @@
 /**
  * Tests for AdvancedAnalyticsForm component
  */
-import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import AdvancedAnalyticsForm from '../src/components/AdvancedAnalyticsForm'
 
@@ -349,22 +349,23 @@ describe('AdvancedAnalyticsForm Component', () => {
     const user = userEvent.setup()
     render(<AdvancedAnalyticsForm onSubmit={mockOnSubmit} />)
     
-    await user.click(screen.getByText(/volatility analysis/i))
+    // Find and click the volatility checkbox - use getAllByText to find the checkbox label
+    const volatilityTexts = screen.getAllByText(/volatility analysis/i)
+    const volatilityCheckboxLabel = volatilityTexts.find(el => 
+      el.tagName === 'SPAN' && el.closest('label.checkbox-label')
+    )
+    expect(volatilityCheckboxLabel).toBeTruthy()
+    await user.click(volatilityCheckboxLabel.closest('label'))
     
+    // Wait for the volatility parameters section to appear
     await waitFor(() => {
       expect(screen.getByLabelText(/rolling window size/i)).toBeInTheDocument()
     })
     
     const volatilityWindowInput = screen.getByLabelText(/rolling window size/i)
-    // Use fireEvent.change to directly set the value to 400
-    // This will trigger the onChange handler: setVolatilityWindow(parseInt('400') || 30) = 400
-    fireEvent.change(volatilityWindowInput, { target: { value: '400' } })
-    
-    // Wait for React to process the state update
-    await waitFor(() => {
-      // Check that the input has the new value (though this might not be necessary)
-      expect(volatilityWindowInput.value).toBe('400')
-    }, { timeout: 1000 })
+    // Clear and type the invalid value
+    await user.clear(volatilityWindowInput)
+    await user.type(volatilityWindowInput, '400')
     
     // Fill in required field
     await user.type(screen.getByLabelText(/series ids/i), 'GDP')
