@@ -160,7 +160,7 @@ describe('AdvancedAnalyticsForm Component', () => {
     const user = userEvent.setup()
     render(<AdvancedAnalyticsForm onSubmit={mockOnSubmit} />)
     
-    await user.click(screen.getByLabelText(/volatility/i))
+    await user.click(screen.getByText(/volatility analysis/i))
     
     await waitFor(() => {
       expect(screen.getByLabelText(/rolling window size/i)).toBeInTheDocument()
