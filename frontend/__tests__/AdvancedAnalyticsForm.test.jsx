@@ -18,9 +18,11 @@ describe('AdvancedAnalyticsForm Component', () => {
     expect(screen.getByLabelText(/series ids/i)).toBeInTheDocument()
     expect(screen.getByText(/forecasts/i)).toBeInTheDocument()
     expect(screen.getByText(/anomaly detection/i)).toBeInTheDocument()
-    expect(screen.getByText(/trends/i)).toBeInTheDocument()
+    // Use getAllByText since "Trend Analysis" appears in checkbox label
+    expect(screen.getAllByText(/trend analysis/i).length).toBeGreaterThan(0)
     expect(screen.getByText(/seasonal decomposition/i)).toBeInTheDocument()
-    expect(screen.getByText(/volatility/i)).toBeInTheDocument()
+    // Use getAllByText since "Volatility Analysis" appears in checkbox label and heading
+    expect(screen.getAllByText(/volatility analysis/i).length).toBeGreaterThan(0)
     expect(screen.getByLabelText(/limit/i)).toBeInTheDocument()
   })
 
@@ -114,8 +116,8 @@ describe('AdvancedAnalyticsForm Component', () => {
     await user.click(screen.getByText(/anomaly detection/i))
     
     await waitFor(() => {
-      expect(screen.getByLabelText(/anomaly method/i)).toBeInTheDocument()
-      expect(screen.getByLabelText(/anomaly threshold/i)).toBeInTheDocument()
+      expect(screen.getByLabelText(/detection method/i)).toBeInTheDocument()
+      expect(screen.getByLabelText(/z-score threshold/i)).toBeInTheDocument()
     })
   })
 
@@ -126,7 +128,10 @@ describe('AdvancedAnalyticsForm Component', () => {
     await user.click(screen.getByText(/trend analysis/i))
     
     await waitFor(() => {
-      expect(screen.getByLabelText(/trend type/i)).toBeInTheDocument()
+      // Trend Type is a radio group, so we check for the label text
+      expect(screen.getByText(/trend type/i)).toBeInTheDocument()
+      expect(screen.getByText(/linear/i)).toBeInTheDocument()
+      expect(screen.getByText(/polynomial/i)).toBeInTheDocument()
     })
   })
 
@@ -136,11 +141,18 @@ describe('AdvancedAnalyticsForm Component', () => {
     
     await user.click(screen.getByText(/trend analysis/i))
     
-    const trendTypeSelect = screen.getByLabelText(/trend type/i)
-    await user.selectOptions(trendTypeSelect, 'polynomial')
+    // Wait for trend type radio buttons to appear
+    await waitFor(() => {
+      expect(screen.getByText(/trend type/i)).toBeInTheDocument()
+    })
+    
+    // Click the polynomial radio button
+    const polynomialRadio = screen.getByLabelText(/polynomial/i)
+    await user.click(polynomialRadio)
     
     await waitFor(() => {
-      expect(screen.getByLabelText(/polynomial degree/i)).toBeInTheDocument()
+      const polynomialDegreeInput = screen.getByLabelText(/polynomial degree/i)
+      expect(polynomialDegreeInput).toBeInTheDocument()
     })
   })
 
@@ -241,8 +253,17 @@ describe('AdvancedAnalyticsForm Component', () => {
     
     await user.click(screen.getByText(/anomaly detection/i))
     
-    const anomalyMethodSelect = screen.getByLabelText(/anomaly method/i)
+    await waitFor(() => {
+      expect(screen.getByLabelText(/detection method/i)).toBeInTheDocument()
+    })
+    
+    const anomalyMethodSelect = screen.getByLabelText(/detection method/i)
     await user.selectOptions(anomalyMethodSelect, 'iqr')
+    
+    await waitFor(() => {
+      // IQR method doesn't require threshold, so threshold input should not be visible
+      expect(screen.queryByLabelText(/z-score threshold/i)).not.toBeInTheDocument()
+    })
     
     await user.type(screen.getByLabelText(/series ids/i), 'GDP')
     
@@ -262,10 +283,21 @@ describe('AdvancedAnalyticsForm Component', () => {
     const user = userEvent.setup()
     render(<AdvancedAnalyticsForm onSubmit={mockOnSubmit} />)
     
-    await user.click(screen.getByLabelText(/forecasts/i))
+    await user.click(screen.getByText(/forecasts/i))
+    
+    await waitFor(() => {
+      expect(screen.getByLabelText(/forecast horizon/i)).toBeInTheDocument()
+    })
     
     const forecastHorizonInput = screen.getByLabelText(/forecast horizon/i)
-    fireEvent.change(forecastHorizonInput, { target: { value: '-5' } })
+    // Select all text first, then type the new value
+    await user.tripleClick(forecastHorizonInput)
+    await user.type(forecastHorizonInput, '150') // Invalid: > 120
+    
+    // Wait for the input value to be updated
+    await waitFor(() => {
+      expect(forecastHorizonInput).toHaveValue(150)
+    })
     
     await user.type(screen.getByLabelText(/series ids/i), 'GDP')
     
@@ -274,7 +306,7 @@ describe('AdvancedAnalyticsForm Component', () => {
     
     await waitFor(() => {
       expect(screen.getByText(/forecast horizon must be between 1 and 120/i)).toBeInTheDocument()
-    })
+    }, { timeout: 3000 })
     
     expect(mockOnSubmit).not.toHaveBeenCalled()
   })
@@ -285,8 +317,19 @@ describe('AdvancedAnalyticsForm Component', () => {
     
     await user.click(screen.getByText(/anomaly detection/i))
     
-    const anomalyThresholdInput = screen.getByLabelText(/anomaly threshold/i)
-    fireEvent.change(anomalyThresholdInput, { target: { value: '-1' } })
+    await waitFor(() => {
+      expect(screen.getByLabelText(/z-score threshold/i)).toBeInTheDocument()
+    })
+    
+    const anomalyThresholdInput = screen.getByLabelText(/z-score threshold/i)
+    // Select all text first, then type the new value
+    await user.tripleClick(anomalyThresholdInput)
+    await user.type(anomalyThresholdInput, '15') // Invalid: > 10.0
+    
+    // Wait for the input value to be updated
+    await waitFor(() => {
+      expect(anomalyThresholdInput).toHaveValue(15)
+    })
     
     await user.type(screen.getByLabelText(/series ids/i), 'GDP')
     
@@ -294,8 +337,8 @@ describe('AdvancedAnalyticsForm Component', () => {
     await user.click(submitButton)
     
     await waitFor(() => {
-      expect(screen.getByText(/anomaly threshold must be positive/i)).toBeInTheDocument()
-    })
+      expect(screen.getByText(/anomaly threshold must be between 1.0 and 10.0/i)).toBeInTheDocument()
+    }, { timeout: 3000 })
     
     expect(mockOnSubmit).not.toHaveBeenCalled()
   })
@@ -306,11 +349,29 @@ describe('AdvancedAnalyticsForm Component', () => {
     
     await user.click(screen.getByText(/trend analysis/i))
     
-    const trendTypeSelect = screen.getByLabelText(/trend type/i)
-    await user.selectOptions(trendTypeSelect, 'polynomial')
+    // Wait for trend type section to appear
+    await waitFor(() => {
+      expect(screen.getByText(/trend type/i)).toBeInTheDocument()
+    })
+    
+    // Click the polynomial radio button (not a select, it's a radio group)
+    const polynomialRadio = screen.getByLabelText(/polynomial/i)
+    await user.click(polynomialRadio)
+    
+    // Wait for polynomial degree input to appear
+    await waitFor(() => {
+      expect(screen.getByLabelText(/polynomial degree/i)).toBeInTheDocument()
+    })
     
     const polynomialDegreeInput = screen.getByLabelText(/polynomial degree/i)
-    fireEvent.change(polynomialDegreeInput, { target: { value: '1' } })
+    // Select all text first, then type the new value
+    await user.tripleClick(polynomialDegreeInput)
+    await user.type(polynomialDegreeInput, '1') // Invalid: < 2
+    
+    // Wait for the input value to be updated
+    await waitFor(() => {
+      expect(polynomialDegreeInput).toHaveValue(1)
+    })
     
     await user.type(screen.getByLabelText(/series ids/i), 'GDP')
     
@@ -318,8 +379,8 @@ describe('AdvancedAnalyticsForm Component', () => {
     await user.click(submitButton)
     
     await waitFor(() => {
-      expect(screen.getByText(/polynomial degree must be at least 2/i)).toBeInTheDocument()
-    })
+      expect(screen.getByText(/polynomial degree must be between 2 and 5/i)).toBeInTheDocument()
+    }, { timeout: 3000 })
     
     expect(mockOnSubmit).not.toHaveBeenCalled()
   })
@@ -330,8 +391,19 @@ describe('AdvancedAnalyticsForm Component', () => {
     
     await user.click(screen.getByText(/seasonal decomposition/i))
     
+    await waitFor(() => {
+      expect(screen.getByLabelText(/seasonal period/i)).toBeInTheDocument()
+    })
+    
     const seasonalPeriodInput = screen.getByLabelText(/seasonal period/i)
-    fireEvent.change(seasonalPeriodInput, { target: { value: '0' } })
+    // Select all text first, then type the new value
+    await user.tripleClick(seasonalPeriodInput)
+    await user.type(seasonalPeriodInput, '400') // Invalid: > 365
+    
+    // Wait for the input value to be updated
+    await waitFor(() => {
+      expect(seasonalPeriodInput).toHaveValue(400)
+    })
     
     await user.type(screen.getByLabelText(/series ids/i), 'GDP')
     
@@ -339,8 +411,8 @@ describe('AdvancedAnalyticsForm Component', () => {
     await user.click(submitButton)
     
     await waitFor(() => {
-      expect(screen.getByText(/seasonal period must be between/i)).toBeInTheDocument()
-    })
+      expect(screen.getByText(/seasonal period must be between 2 and 365/i)).toBeInTheDocument()
+    }, { timeout: 3000 })
     
     expect(mockOnSubmit).not.toHaveBeenCalled()
   })
@@ -348,7 +420,7 @@ describe('AdvancedAnalyticsForm Component', () => {
   test('validates volatility window is positive', async () => {
     const user = userEvent.setup()
     render(<AdvancedAnalyticsForm onSubmit={mockOnSubmit} />)
-    
+
     // Find and click the volatility checkbox - use getAllByText to find the checkbox label
     const volatilityTexts = screen.getAllByText(/volatility analysis/i)
     const volatilityCheckboxLabel = volatilityTexts.find(el => 
@@ -356,28 +428,34 @@ describe('AdvancedAnalyticsForm Component', () => {
     )
     expect(volatilityCheckboxLabel).toBeTruthy()
     await user.click(volatilityCheckboxLabel.closest('label'))
-    
+
     // Wait for the volatility parameters section to appear
     await waitFor(() => {
       expect(screen.getByLabelText(/rolling window size/i)).toBeInTheDocument()
     })
-    
+
     const volatilityWindowInput = screen.getByLabelText(/rolling window size/i)
-    // Clear and type the invalid value
-    await user.clear(volatilityWindowInput)
-    await user.type(volatilityWindowInput, '400')
-    
+    // Select all text first, then type the new value
+    await user.tripleClick(volatilityWindowInput)
+    await user.type(volatilityWindowInput, '400') // Invalid: > 365
+
+    // Wait for the input value to be updated
+    await waitFor(() => {
+      expect(volatilityWindowInput).toHaveValue(400)
+    })
+
     // Fill in required field
     await user.type(screen.getByLabelText(/series ids/i), 'GDP')
-    
+
     const submitButton = screen.getByRole('button', { name: /run advanced analytics/i })
     await user.click(submitButton)
-    
+
     // The validation should catch the invalid value (400 > 365)
+    // The error message is "Volatility window must be between 2 and 365"
     await waitFor(() => {
-      expect(screen.getByText(/volatility window must be between/i)).toBeInTheDocument()
+      expect(screen.getByText(/volatility window must be between 2 and 365/i)).toBeInTheDocument()
     }, { timeout: 3000 })
-    
+
     expect(mockOnSubmit).not.toHaveBeenCalled()
   })
 })

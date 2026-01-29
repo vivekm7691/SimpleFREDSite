@@ -49,7 +49,11 @@ describe('TrendsView Component', () => {
     
     expect(screen.getByText('GDP')).toBeInTheDocument()
     expect(screen.getAllByText(/polynomial/i).length).toBeGreaterThan(0)
-    expect(screen.getByText(/2/i)).toBeInTheDocument() // Polynomial degree
+    // Check for polynomial degree label and value - "2" appears in multiple places
+    expect(screen.getByText(/polynomial degree/i)).toBeInTheDocument()
+    // The degree value "2" appears in the trend value span
+    const degreeValues = screen.getAllByText('2')
+    expect(degreeValues.length).toBeGreaterThan(0)
   })
 
   test('displays trend direction with correct color', () => {
