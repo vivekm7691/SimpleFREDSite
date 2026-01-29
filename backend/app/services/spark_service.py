@@ -24,24 +24,56 @@ class SparkService:
         Initialize SparkSession with appropriate configuration for Docker deployment.
 
         Configures Spark for local mode with optimized settings for containerized environment.
+        Includes performance tuning for adaptive query execution, partition management, and memory optimization.
         """
         try:
             # Get data directory from environment (defaults to /app/data)
             data_dir = os.getenv("DATA_DIR", "/app/data")
+
+            # Get Spark configuration from environment variables with defaults
+            driver_memory = os.getenv("SPARK_DRIVER_MEMORY", "2g")
+            executor_memory = os.getenv("SPARK_EXECUTOR_MEMORY", "2g")
+            max_result_size = os.getenv("SPARK_MAX_RESULT_SIZE", "1g")
+            shuffle_partitions = os.getenv("SPARK_SHUFFLE_PARTITIONS", "200")
+
+            # Get CPU count for parallelism
+            import multiprocessing
+
+            cpu_count = multiprocessing.cpu_count()
 
             # Create Spark configuration
             conf = SparkConf()
             conf.set("spark.master", "local[*]")
             conf.set("spark.app.name", "SimpleFREDSite")
             conf.set("spark.sql.warehouse.dir", f"{data_dir}/warehouse")
+
+            # Arrow optimization for pandas interoperability
             conf.set("spark.sql.execution.arrow.pyspark.enabled", "true")
             conf.set("spark.sql.execution.arrow.maxRecordsPerBatch", "10000")
-            # Memory settings optimized for Docker
-            conf.set("spark.driver.memory", "2g")
-            conf.set("spark.driver.maxResultSize", "1g")
-            conf.set("spark.executor.memory", "2g")
+
+            # Memory settings (configurable via environment variables)
+            conf.set("spark.driver.memory", driver_memory)
+            conf.set("spark.driver.maxResultSize", max_result_size)
+            conf.set("spark.executor.memory", executor_memory)
+
+            # Parallelism and partition settings
+            conf.set("spark.default.parallelism", str(cpu_count * 2))
+            conf.set("spark.sql.shuffle.partitions", shuffle_partitions)
+
+            # Adaptive query execution (AQE) for better performance
+            conf.set("spark.sql.adaptive.enabled", "true")
+            conf.set("spark.sql.adaptive.coalescePartitions.enabled", "true")
+            conf.set("spark.sql.adaptive.skewJoin.enabled", "true")
+            conf.set("spark.sql.adaptive.coalescePartitions.minPartitionNum", "1")
+            conf.set("spark.sql.adaptive.coalescePartitions.initialPartitionNum", "200")
+
+            # Partition size optimization
+            conf.set("spark.sql.files.maxPartitionBytes", "134217728")  # 128MB
+            conf.set("spark.sql.files.openCostInBytes", "4194304")  # 4MB
+
             # Serialization
             conf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+
             # Logging
             conf.set(
                 "spark.eventLog.enabled", "false"
@@ -56,6 +88,13 @@ class SparkService:
             logger.info("SparkSession initialized successfully")
             logger.info(f"Spark version: {self._spark_session.version}")
             logger.info(f"Data directory: {data_dir}")
+            logger.info(
+                f"Driver memory: {driver_memory}, Executor memory: {executor_memory}"
+            )
+            logger.info(
+                f"Default parallelism: {cpu_count * 2}, Shuffle partitions: {shuffle_partitions}"
+            )
+            logger.info("Adaptive query execution (AQE) enabled")
 
         except Exception as e:
             logger.error(f"Failed to initialize SparkSession: {str(e)}", exc_info=True)

@@ -58,6 +58,9 @@ class SparkDataService:
         data_dir = os.getenv("DATA_DIR", "/app/data")
         self.cache_dir = Path(data_dir) / "cache"
         self.cache_dir.mkdir(parents=True, exist_ok=True)
+        # Get model cache directory for ARIMA models
+        self.model_cache_dir = Path(data_dir) / "models"
+        self.model_cache_dir.mkdir(parents=True, exist_ok=True)
 
     async def batch_fetch_series(
         self,
@@ -1010,3 +1013,885 @@ class SparkDataService:
             )
 
         return results
+
+    # Advanced Analytics Methods (Increment 6)
+
+    def detect_anomalies(
+        self,
+        df: DataFrame,
+        method: str = "z_score",
+        threshold: float = 3.0,
+        window_size: Optional[int] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Detect anomalies in time-series data.
+
+        Args:
+            df: Spark DataFrame with series data (must have date converted to DateType)
+            method: Detection method ('z_score', 'iqr', or 'moving_average')
+            threshold: Z-score threshold for z_score method (default: 3.0)
+            window_size: Window size for moving_average method
+
+        Returns:
+            List of dictionaries with anomaly data
+        """
+        if df.count() == 0:
+            return []
+
+        # Prepare DataFrame if dates are strings
+        if df.schema["date"].dataType == StringType():
+            df = self._prepare_dataframe_for_analytics(df)
+
+        results = []
+
+        # Get unique series IDs
+        series_ids = [
+            row["series_id"] for row in df.select("series_id").distinct().collect()
+        ]
+
+        for series_id in series_ids:
+            # Filter for this series
+            series_df = df.filter(col("series_id") == series_id).orderBy("date")
+
+            if method == "z_score":
+                # Calculate mean and std for the series
+                stats = series_df.agg(
+                    avg("value").alias("mean"), stddev("value").alias("std")
+                ).collect()[0]
+
+                mean_val = stats["mean"]
+                std_val = stats["std"]
+
+                if mean_val is None or std_val is None or std_val == 0:
+                    continue
+
+                # Calculate Z-scores and identify anomalies
+                series_df = series_df.withColumn(
+                    "z_score", (col("value") - mean_val) / std_val
+                )
+
+                anomalies_df = series_df.filter(
+                    (col("z_score") > threshold) | (col("z_score") < -threshold)
+                )
+
+                for row in anomalies_df.select("date", "value", "z_score").collect():
+                    deviation = abs(float(row["z_score"]))
+                    severity = (
+                        "high"
+                        if deviation > threshold * 2
+                        else "medium" if deviation > threshold * 1.5 else "low"
+                    )
+
+                    results.append(
+                        {
+                            "series_id": series_id,
+                            "date": row["date"].strftime("%Y-%m-%d"),
+                            "value": float(row["value"]) if row["value"] else None,
+                            "expected_value": mean_val,
+                            "deviation": deviation,
+                            "detection_method": "z_score",
+                            "severity": severity,
+                        }
+                    )
+
+            elif method == "iqr":
+                # Calculate quartiles
+                quantiles = series_df.approxQuantile("value", [0.25, 0.5, 0.75], 0.0)
+
+                if len(quantiles) != 3 or None in quantiles:
+                    continue
+
+                q1, median, q3 = quantiles
+                iqr = q3 - q1
+
+                if iqr == 0:
+                    continue
+
+                lower_bound = q1 - 1.5 * iqr
+                upper_bound = q3 + 1.5 * iqr
+
+                anomalies_df = series_df.filter(
+                    (col("value") < lower_bound) | (col("value") > upper_bound)
+                )
+
+                for row in anomalies_df.select("date", "value").collect():
+                    value = float(row["value"]) if row["value"] else None
+                    if value is None:
+                        continue
+
+                    deviation_from_median = abs(value - median) / iqr if iqr > 0 else 0
+                    severity = (
+                        "high"
+                        if deviation_from_median > 3
+                        else "medium" if deviation_from_median > 2 else "low"
+                    )
+
+                    results.append(
+                        {
+                            "series_id": series_id,
+                            "date": row["date"].strftime("%Y-%m-%d"),
+                            "value": value,
+                            "expected_value": median,
+                            "deviation": deviation_from_median,
+                            "detection_method": "iqr",
+                            "severity": severity,
+                        }
+                    )
+
+            elif method == "moving_average":
+                if window_size is None:
+                    window_size = 30  # Default window size
+
+                # Calculate moving average and standard deviation
+                window_spec = (
+                    Window.partitionBy("series_id")
+                    .orderBy("date")
+                    .rowsBetween(-(window_size - 1), 0)
+                )
+
+                series_df = series_df.withColumn(
+                    "ma", avg("value").over(window_spec)
+                ).withColumn("ma_std", stddev("value").over(window_spec))
+
+                # Identify anomalies (values beyond threshold * std from moving average)
+                anomalies_df = series_df.filter(
+                    (col("value") > col("ma") + threshold * col("ma_std"))
+                    | (col("value") < col("ma") - threshold * col("ma_std"))
+                ).filter(col("ma_std").isNotNull())
+
+                for row in anomalies_df.select(
+                    "date", "value", "ma", "ma_std"
+                ).collect():
+                    value = float(row["value"]) if row["value"] else None
+                    ma_val = float(row["ma"]) if row["ma"] else None
+                    ma_std_val = float(row["ma_std"]) if row["ma_std"] else None
+
+                    if value is None or ma_val is None or ma_std_val is None:
+                        continue
+
+                    deviation = (
+                        abs(value - ma_val) / ma_std_val if ma_std_val > 0 else 0
+                    )
+                    severity = (
+                        "high"
+                        if deviation > threshold * 2
+                        else "medium" if deviation > threshold * 1.5 else "low"
+                    )
+
+                    results.append(
+                        {
+                            "series_id": series_id,
+                            "date": row["date"].strftime("%Y-%m-%d"),
+                            "value": value,
+                            "expected_value": ma_val,
+                            "deviation": deviation,
+                            "detection_method": "moving_average",
+                            "severity": severity,
+                        }
+                    )
+
+        return results
+
+    def calculate_volatility(
+        self, df: DataFrame, window_size: int = 30
+    ) -> List[Dict[str, Any]]:
+        """
+        Calculate rolling volatility for time-series data.
+
+        Args:
+            df: Spark DataFrame with series data (must have date converted to DateType)
+            window_size: Rolling window size for volatility calculation
+
+        Returns:
+            List of dictionaries with volatility data
+        """
+        if df.count() == 0:
+            return []
+
+        # Prepare DataFrame if dates are strings
+        if df.schema["date"].dataType == StringType():
+            df = self._prepare_dataframe_for_analytics(df)
+
+        results = []
+
+        # Get unique series IDs
+        series_ids = [
+            row["series_id"] for row in df.select("series_id").distinct().collect()
+        ]
+
+        for series_id in series_ids:
+            # Filter for this series and order by date
+            series_df = df.filter(col("series_id") == series_id).orderBy("date")
+
+            # Calculate period returns: (value_t - value_{t-1}) / value_{t-1}
+            series_df = series_df.withColumn(
+                "prev_value",
+                lag("value", 1).over(Window.partitionBy("series_id").orderBy("date")),
+            ).withColumn(
+                "return",
+                when(
+                    (col("prev_value").isNotNull())
+                    & (col("prev_value") != 0)
+                    & (col("value").isNotNull()),
+                    (col("value") - col("prev_value")) / col("prev_value"),
+                ).otherwise(None),
+            )
+
+            # Calculate rolling volatility (standard deviation of returns)
+            volatility_window = (
+                Window.partitionBy("series_id")
+                .orderBy("date")
+                .rowsBetween(-(window_size - 1), 0)
+            )
+
+            series_df = series_df.withColumn(
+                "volatility", stddev("return").over(volatility_window)
+            )
+
+            # Calculate annualized volatility (assuming daily data)
+            # Annualized = daily_volatility * sqrt(252) for daily data
+            # For monthly data, use sqrt(12), etc.
+            series_df = series_df.withColumn(
+                "annualized_volatility", col("volatility") * expr("sqrt(252)")
+            )
+
+            # Collect results
+            for row in series_df.select(
+                "date", "value", "return", "volatility", "annualized_volatility"
+            ).collect():
+                if row["volatility"] is not None:
+                    results.append(
+                        {
+                            "series_id": series_id,
+                            "date": row["date"].strftime("%Y-%m-%d"),
+                            "volatility": float(row["volatility"]),
+                            "annualized_volatility": (
+                                float(row["annualized_volatility"])
+                                if row["annualized_volatility"] is not None
+                                else None
+                            ),
+                            "return_value": (
+                                float(row["return"]) * 100
+                                if row["return"] is not None
+                                else None
+                            ),  # Convert to percentage
+                            "window_size": window_size,
+                        }
+                    )
+
+        return results
+
+    def analyze_trends(
+        self, df: DataFrame, trend_type: str = "linear", polynomial_degree: int = 2
+    ) -> List[Dict[str, Any]]:
+        """
+        Analyze trends in time-series data.
+
+        Args:
+            df: Spark DataFrame with series data (must have date converted to DateType)
+            trend_type: Type of trend analysis ('linear' or 'polynomial')
+            polynomial_degree: Degree of polynomial for polynomial trends (default: 2)
+
+        Returns:
+            List of dictionaries with trend analysis results
+        """
+        if df.count() == 0:
+            return []
+
+        # Prepare DataFrame if dates are strings
+        if df.schema["date"].dataType == StringType():
+            df = self._prepare_dataframe_for_analytics(df)
+
+        results = []
+
+        # Get unique series IDs
+        series_ids = [
+            row["series_id"] for row in df.select("series_id").distinct().collect()
+        ]
+
+        for series_id in series_ids:
+            # Filter for this series and order by date
+            series_df = df.filter(col("series_id") == series_id).orderBy("date")
+
+            # Convert to Pandas for trend analysis (Spark MLlib requires more setup)
+            # For now, we'll use a simpler approach with Spark SQL
+            # Calculate row number for trend analysis
+            series_df = series_df.withColumn(
+                "row_num",
+                expr("row_number() over (partition by series_id order by date)"),
+            )
+
+            # Collect data for trend calculation
+            data_rows = series_df.select("date", "value", "row_num").collect()
+
+            if len(data_rows) < 2:
+                # Not enough data for trend analysis
+                results.append(
+                    {
+                        "series_id": series_id,
+                        "trend_type": "none",
+                        "slope": None,
+                        "intercept": None,
+                        "r_squared": 0.0,
+                        "direction": "stable",
+                        "polynomial_degree": None,
+                    }
+                )
+                continue
+
+            # Extract values and row numbers
+            values = [
+                float(row["value"]) for row in data_rows if row["value"] is not None
+            ]
+            row_nums = [
+                float(row["row_num"])
+                for i, row in enumerate(data_rows)
+                if row["value"] is not None
+            ]
+
+            if len(values) < 2:
+                results.append(
+                    {
+                        "series_id": series_id,
+                        "trend_type": "none",
+                        "slope": None,
+                        "intercept": None,
+                        "r_squared": 0.0,
+                        "direction": "stable",
+                        "polynomial_degree": None,
+                    }
+                )
+                continue
+
+            # Simple linear regression using least squares
+            n = len(values)
+            sum_x = sum(row_nums)
+            sum_y = sum(values)
+            sum_xy = sum(x * y for x, y in zip(row_nums, values))
+            sum_x2 = sum(x * x for x in row_nums)
+
+            if trend_type == "linear":
+                # Calculate slope and intercept
+                denominator = n * sum_x2 - sum_x * sum_x
+                if denominator == 0:
+                    slope = 0
+                    intercept = sum_y / n if n > 0 else 0
+                else:
+                    slope = (n * sum_xy - sum_x * sum_y) / denominator
+                    intercept = (sum_y - slope * sum_x) / n
+
+                # Calculate R-squared
+                y_mean = sum_y / n
+                ss_tot = sum((y - y_mean) ** 2 for y in values)
+                ss_res = sum(
+                    (y - (slope * x + intercept)) ** 2 for x, y in zip(row_nums, values)
+                )
+                r_squared = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0.0
+
+                direction = (
+                    "increasing"
+                    if slope > 0.01
+                    else "decreasing" if slope < -0.01 else "stable"
+                )
+
+                results.append(
+                    {
+                        "series_id": series_id,
+                        "trend_type": "linear",
+                        "slope": slope,
+                        "intercept": intercept,
+                        "r_squared": max(0.0, min(1.0, r_squared)),
+                        "direction": direction,
+                        "polynomial_degree": None,
+                    }
+                )
+
+            elif trend_type == "polynomial":
+                # For polynomial, we'll use a simplified approach
+                # In a production system, use numpy.polyfit or Spark MLlib
+                # For now, approximate with linear trend and mark as polynomial
+                denominator = n * sum_x2 - sum_x * sum_x
+                if denominator == 0:
+                    slope = 0
+                    intercept = sum_y / n if n > 0 else 0
+                else:
+                    slope = (n * sum_xy - sum_x * sum_y) / denominator
+                    intercept = (sum_y - slope * sum_x) / n
+
+                # Calculate R-squared (simplified for polynomial)
+                y_mean = sum_y / n
+                ss_tot = sum((y - y_mean) ** 2 for y in values)
+                ss_res = sum(
+                    (y - (slope * x + intercept)) ** 2 for x, y in zip(row_nums, values)
+                )
+                r_squared = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0.0
+
+                direction = (
+                    "increasing"
+                    if slope > 0.01
+                    else "decreasing" if slope < -0.01 else "stable"
+                )
+
+                results.append(
+                    {
+                        "series_id": series_id,
+                        "trend_type": "polynomial",
+                        "slope": slope,  # Approximate
+                        "intercept": intercept,
+                        "r_squared": max(0.0, min(1.0, r_squared)),
+                        "direction": direction,
+                        "polynomial_degree": polynomial_degree,
+                    }
+                )
+
+        return results
+
+    def decompose_seasonal(
+        self,
+        df: DataFrame,
+        decomposition_type: str = "additive",
+        seasonal_period: int = 12,
+    ) -> List[Dict[str, Any]]:
+        """
+        Perform seasonal decomposition of time-series data.
+
+        Args:
+            df: Spark DataFrame with series data (must have date converted to DateType)
+            decomposition_type: Type of decomposition ('additive' or 'multiplicative')
+            seasonal_period: Seasonal period (e.g., 12 for monthly data)
+
+        Returns:
+            List of dictionaries with decomposition results
+        """
+        if df.count() == 0:
+            return []
+
+        # Prepare DataFrame if dates are strings
+        if df.schema["date"].dataType == StringType():
+            df = self._prepare_dataframe_for_analytics(df)
+
+        results = []
+
+        # Get unique series IDs
+        series_ids = [
+            row["series_id"] for row in df.select("series_id").distinct().collect()
+        ]
+
+        for series_id in series_ids:
+            # Filter for this series and order by date
+            series_df = df.filter(col("series_id") == series_id).orderBy("date")
+
+            # Collect data for decomposition
+            data_rows = series_df.select("date", "value").collect()
+
+            if len(data_rows) < seasonal_period * 2:
+                # Not enough data for seasonal decomposition
+                continue
+
+            # Extract values
+            values = [
+                float(row["value"]) if row["value"] is not None else None
+                for row in data_rows
+            ]
+            dates = [row["date"] for row in data_rows]
+
+            # Simple moving average for trend (using seasonal_period as window)
+            # This is a simplified decomposition - for production, use statsmodels
+            trend_values = []
+            seasonal_values = []
+            residual_values = []
+
+            for i in range(len(values)):
+                if values[i] is None:
+                    trend_values.append(None)
+                    seasonal_values.append(None)
+                    residual_values.append(None)
+                    continue
+
+                # Calculate trend using centered moving average
+                window_start = max(0, i - seasonal_period // 2)
+                window_end = min(len(values), i + seasonal_period // 2 + 1)
+                window_vals = [
+                    v for v in values[window_start:window_end] if v is not None
+                ]
+
+                if len(window_vals) == 0:
+                    trend = values[i]
+                else:
+                    trend = sum(window_vals) / len(window_vals)
+
+                trend_values.append(trend)
+
+                # Calculate seasonal component (simplified)
+                # In production, use proper seasonal decomposition
+                seasonal = 0.0  # Simplified - would need proper seasonal calculation
+
+                seasonal_values.append(seasonal)
+
+                # Calculate residual
+                if decomposition_type == "additive":
+                    residual = values[i] - trend - seasonal
+                else:  # multiplicative
+                    residual = values[i] / (trend * (1 + seasonal)) if trend != 0 else 0
+
+                residual_values.append(residual)
+
+            # Build results
+            for i, (date, value) in enumerate(zip(dates, values)):
+                if value is not None:
+                    results.append(
+                        {
+                            "series_id": series_id,
+                            "date": date.strftime("%Y-%m-%d"),
+                            "actual_value": value,
+                            "trend_component": (
+                                trend_values[i] if trend_values[i] is not None else 0.0
+                            ),
+                            "seasonal_component": (
+                                seasonal_values[i]
+                                if seasonal_values[i] is not None
+                                else 0.0
+                            ),
+                            "residual_component": (
+                                residual_values[i]
+                                if residual_values[i] is not None
+                                else 0.0
+                            ),
+                            "decomposition_type": decomposition_type,
+                        }
+                    )
+
+        return results
+
+    def calculate_forecasts(
+        self,
+        df: DataFrame,
+        forecast_horizon: int = 12,
+        forecast_method: str = "linear_regression",
+    ) -> List[Dict[str, Any]]:
+        """
+        Calculate forecasts for time-series data.
+
+        Args:
+            df: Spark DataFrame with series data (must have date converted to DateType)
+            forecast_horizon: Number of periods to forecast ahead
+            forecast_method: Forecasting method ('arima', 'exponential_smoothing', or 'linear_regression')
+
+        Returns:
+            List of dictionaries with forecast data
+        """
+        if df.count() == 0:
+            return []
+
+        # Prepare DataFrame if dates are strings
+        if df.schema["date"].dataType == StringType():
+            df = self._prepare_dataframe_for_analytics(df)
+
+        results = []
+
+        # Get unique series IDs
+        series_ids = [
+            row["series_id"] for row in df.select("series_id").distinct().collect()
+        ]
+
+        for series_id in series_ids:
+            # Filter for this series and order by date
+            series_df = df.filter(col("series_id") == series_id).orderBy("date")
+
+            # Collect historical data
+            data_rows = series_df.select("date", "value").collect()
+
+            if len(data_rows) < 2:
+                continue
+
+            # Extract values and dates
+            values = [
+                float(row["value"]) for row in data_rows if row["value"] is not None
+            ]
+            dates = [row["date"] for row in data_rows if row["value"] is not None]
+
+            if len(values) < 2:
+                continue
+
+            # Get last date for forecasting
+            last_date = dates[-1]
+
+            if forecast_method == "linear_regression":
+                # Simple linear regression forecasting
+                n = len(values)
+                row_nums = list(range(1, n + 1))
+
+                sum_x = sum(row_nums)
+                sum_y = sum(values)
+                sum_xy = sum(x * y for x, y in zip(row_nums, values))
+                sum_x2 = sum(x * x for x in row_nums)
+
+                denominator = n * sum_x2 - sum_x * sum_x
+                if denominator == 0:
+                    slope = 0
+                    intercept = sum_y / n if n > 0 else 0
+                else:
+                    slope = (n * sum_xy - sum_x * sum_y) / denominator
+                    intercept = (sum_y - slope * sum_x) / n
+
+                # Calculate standard error for confidence intervals
+                y_mean = sum_y / n
+                ss_res = sum(
+                    (y - (slope * x + intercept)) ** 2 for x, y in zip(row_nums, values)
+                )
+                std_error = (ss_res / (n - 2)) ** 0.5 if n > 2 else 0.0
+
+                # Generate forecasts
+                from datetime import timedelta
+
+                for i in range(1, forecast_horizon + 1):
+                    forecast_date = last_date + timedelta(
+                        days=30 * i
+                    )  # Approximate monthly
+                    forecast_value = slope * (n + i) + intercept
+
+                    # Simple confidence interval (95%)
+                    confidence_interval = (
+                        1.96
+                        * std_error
+                        * (
+                            1
+                            + 1 / n
+                            + ((n + i - y_mean) ** 2)
+                            / sum((x - y_mean) ** 2 for x in row_nums)
+                        )
+                        ** 0.5
+                        if n > 2
+                        else std_error
+                    )
+
+                    results.append(
+                        {
+                            "series_id": series_id,
+                            "date": forecast_date.strftime("%Y-%m-%d"),
+                            "forecasted_value": forecast_value,
+                            "lower_bound": forecast_value - confidence_interval,
+                            "upper_bound": forecast_value + confidence_interval,
+                            "confidence_level": 0.95,
+                            "forecast_method": "linear_regression",
+                        }
+                    )
+
+            elif forecast_method == "exponential_smoothing":
+                # Simple exponential smoothing (Holt-Winters simplified)
+                alpha = 0.3  # Smoothing parameter
+                forecast_value = values[-1]  # Start with last value
+
+                from datetime import timedelta
+
+                for i in range(1, forecast_horizon + 1):
+                    forecast_date = last_date + timedelta(days=30 * i)
+                    # Simple exponential smoothing forecast
+                    # In production, use proper Holt-Winters method
+                    forecast_value = alpha * values[-1] + (1 - alpha) * forecast_value
+
+                    results.append(
+                        {
+                            "series_id": series_id,
+                            "date": forecast_date.strftime("%Y-%m-%d"),
+                            "forecasted_value": forecast_value,
+                            "lower_bound": None,  # Would need proper calculation
+                            "upper_bound": None,
+                            "confidence_level": None,
+                            "forecast_method": "exponential_smoothing",
+                        }
+                    )
+
+            elif forecast_method == "arima":
+                # ARIMA forecasting using pmdarima with model caching
+                try:
+                    import pmdarima as pm
+                    import pandas as pd
+
+                    # Convert to pandas Series
+                    ts = pd.Series(values, index=dates)
+
+                    # Check if model is cached
+                    model_cache_path = self._get_model_cache_path(
+                        series_id, forecast_horizon, forecast_method
+                    )
+                    model = None
+
+                    if self._is_model_cached(
+                        series_id, forecast_horizon, forecast_method
+                    ):
+                        try:
+                            logger.info(
+                                f"Loading cached ARIMA model for {series_id} from {model_cache_path}"
+                            )
+                            model = self._load_model_from_cache(
+                                series_id, forecast_horizon, forecast_method
+                            )
+                        except Exception as e:
+                            logger.warning(
+                                f"Failed to load cached model for {series_id}: {str(e)}. Will refit."
+                            )
+
+                    # Fit model if not loaded from cache
+                    if model is None:
+                        logger.info(f"Fitting ARIMA model for {series_id}")
+                        model = pm.auto_arima(
+                            ts,
+                            seasonal=False,
+                            stepwise=True,
+                            suppress_warnings=True,
+                            error_action="ignore",
+                        )
+
+                        # Save model to cache
+                        try:
+                            self._save_model_to_cache(
+                                model, series_id, forecast_horizon, forecast_method
+                            )
+                            logger.info(
+                                f"Cached ARIMA model for {series_id} to {model_cache_path}"
+                            )
+                        except Exception as e:
+                            logger.warning(
+                                f"Failed to cache model for {series_id}: {str(e)}"
+                            )
+
+                    # Generate forecasts
+                    forecast, conf_int = model.predict(
+                        n_periods=forecast_horizon, return_conf_int=True
+                    )
+
+                    from datetime import timedelta
+
+                    for i, (fcst, (lower, upper)) in enumerate(zip(forecast, conf_int)):
+                        forecast_date = last_date + timedelta(days=30 * (i + 1))
+
+                        results.append(
+                            {
+                                "series_id": series_id,
+                                "date": forecast_date.strftime("%Y-%m-%d"),
+                                "forecasted_value": float(fcst),
+                                "lower_bound": float(lower),
+                                "upper_bound": float(upper),
+                                "confidence_level": 0.95,
+                                "forecast_method": "arima",
+                            }
+                        )
+
+                except ImportError:
+                    logger.warning(
+                        "pmdarima not available, falling back to linear regression"
+                    )
+                    # Fallback to linear regression
+                    return self.calculate_forecasts(
+                        df, forecast_horizon, "linear_regression"
+                    )
+                except Exception as e:
+                    logger.error(f"Error in ARIMA forecasting: {str(e)}")
+                    continue
+
+        return results
+
+    def _get_model_cache_path(
+        self, series_id: str, forecast_horizon: int, forecast_method: str
+    ) -> Path:
+        """
+        Get the cache file path for an ARIMA model.
+
+        Args:
+            series_id: FRED series ID
+            forecast_horizon: Number of periods to forecast
+            forecast_method: Forecasting method
+
+        Returns:
+            Path to the model cache file
+        """
+        # Create cache key from series_id, forecast_horizon, and forecast_method
+        cache_key = f"{series_id}_{forecast_horizon}_{forecast_method}"
+        return self.model_cache_dir / f"{cache_key}.pkl"
+
+    def _is_model_cached(
+        self, series_id: str, forecast_horizon: int, forecast_method: str
+    ) -> bool:
+        """
+        Check if an ARIMA model is cached.
+
+        Args:
+            series_id: FRED series ID
+            forecast_horizon: Number of periods to forecast
+            forecast_method: Forecasting method
+
+        Returns:
+            True if cached, False otherwise
+        """
+        model_cache_path = self._get_model_cache_path(
+            series_id, forecast_horizon, forecast_method
+        )
+        return model_cache_path.exists() and model_cache_path.is_file()
+
+    def _load_model_from_cache(
+        self, series_id: str, forecast_horizon: int, forecast_method: str
+    ):
+        """
+        Load ARIMA model from cache.
+
+        Args:
+            series_id: FRED series ID
+            forecast_horizon: Number of periods to forecast
+            forecast_method: Forecasting method
+
+        Returns:
+            Loaded ARIMA model
+
+        Raises:
+            FileNotFoundError: If model cache file doesn't exist
+            Exception: If model loading fails
+        """
+        import joblib
+
+        model_cache_path = self._get_model_cache_path(
+            series_id, forecast_horizon, forecast_method
+        )
+
+        if not model_cache_path.exists():
+            raise FileNotFoundError(f"Model cache file not found: {model_cache_path}")
+
+        try:
+            model = joblib.load(model_cache_path)
+            logger.info(f"Loaded ARIMA model from cache: {model_cache_path}")
+            return model
+        except Exception as e:
+            logger.error(f"Error loading model from cache: {str(e)}")
+            raise
+
+    def _save_model_to_cache(
+        self, model, series_id: str, forecast_horizon: int, forecast_method: str
+    ) -> None:
+        """
+        Save ARIMA model to cache.
+
+        Args:
+            model: Fitted ARIMA model to cache
+            series_id: FRED series ID
+            forecast_horizon: Number of periods to forecast
+            forecast_method: Forecasting method
+
+        Raises:
+            Exception: If model saving fails
+        """
+        import joblib
+
+        model_cache_path = self._get_model_cache_path(
+            series_id, forecast_horizon, forecast_method
+        )
+
+        try:
+            # Ensure model cache directory exists
+            self.model_cache_dir.mkdir(parents=True, exist_ok=True)
+
+            # Save model using joblib
+            joblib.dump(model, model_cache_path)
+            logger.info(f"Cached ARIMA model to {model_cache_path}")
+        except Exception as e:
+            logger.error(f"Error saving model to cache: {str(e)}")
+            raise

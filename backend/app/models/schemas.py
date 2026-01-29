@@ -349,3 +349,223 @@ class AnalyticsResponse(BaseModel):
     time_aggregations: Optional[List[TimeAggregation]] = Field(
         None, description="Time-based aggregation data"
     )
+
+
+# Advanced Analytics Models (Increment 6)
+
+
+class Forecast(BaseModel):
+    """Model for forecasted values."""
+
+    series_id: str = Field(..., description="FRED series ID")
+    date: str = Field(..., description="Forecast date (YYYY-MM-DD)")
+    forecasted_value: float = Field(..., description="Forecasted value")
+    lower_bound: Optional[float] = Field(
+        None, description="Lower bound of confidence interval"
+    )
+    upper_bound: Optional[float] = Field(
+        None, description="Upper bound of confidence interval"
+    )
+    confidence_level: Optional[float] = Field(
+        None, ge=0.0, le=1.0, description="Confidence level (e.g., 0.95 for 95%)"
+    )
+    forecast_method: str = Field(
+        ...,
+        description="Forecasting method: 'arima', 'exponential_smoothing', or 'linear_regression'",
+    )
+
+
+class Anomaly(BaseModel):
+    """Model for detected anomalies."""
+
+    series_id: str = Field(..., description="FRED series ID")
+    date: str = Field(..., description="Date of anomaly (YYYY-MM-DD)")
+    value: float = Field(..., description="Anomalous value")
+    expected_value: Optional[float] = Field(
+        None, description="Expected value (mean or moving average)"
+    )
+    deviation: float = Field(
+        ..., description="Deviation in standard deviations from mean"
+    )
+    detection_method: str = Field(
+        ...,
+        description="Detection method: 'z_score', 'iqr', or 'moving_average'",
+    )
+    severity: str = Field(..., description="Severity level: 'low', 'medium', or 'high'")
+
+
+class Trend(BaseModel):
+    """Model for trend analysis results."""
+
+    series_id: str = Field(..., description="FRED series ID")
+    trend_type: str = Field(
+        ..., description="Type of trend: 'linear', 'polynomial', or 'none'"
+    )
+    slope: Optional[float] = Field(None, description="Slope for linear trends")
+    intercept: Optional[float] = Field(None, description="Intercept for linear trends")
+    r_squared: float = Field(
+        ..., ge=0.0, le=1.0, description="R-squared value (trend strength)"
+    )
+    direction: str = Field(
+        ...,
+        description="Trend direction: 'increasing', 'decreasing', or 'stable'",
+    )
+    polynomial_degree: Optional[int] = Field(
+        None, ge=2, le=5, description="Polynomial degree for polynomial trends"
+    )
+
+
+class SeasonalDecomposition(BaseModel):
+    """Model for seasonal decomposition results."""
+
+    series_id: str = Field(..., description="FRED series ID")
+    date: str = Field(..., description="Date (YYYY-MM-DD)")
+    actual_value: float = Field(..., description="Original value")
+    trend_component: float = Field(..., description="Trend component")
+    seasonal_component: float = Field(..., description="Seasonal component")
+    residual_component: float = Field(..., description="Residual component")
+    decomposition_type: str = Field(
+        ...,
+        description="Decomposition type: 'additive' or 'multiplicative'",
+    )
+
+
+class Volatility(BaseModel):
+    """Model for volatility analysis results."""
+
+    series_id: str = Field(..., description="FRED series ID")
+    date: str = Field(..., description="Date (YYYY-MM-DD)")
+    volatility: float = Field(..., description="Rolling volatility")
+    annualized_volatility: Optional[float] = Field(
+        None, description="Annualized volatility"
+    )
+    return_value: Optional[float] = Field(
+        None, description="Period return (percentage change)"
+    )
+    window_size: int = Field(..., ge=2, description="Rolling window size used")
+
+
+class AdvancedAnalyticsRequest(BaseModel):
+    """Request model for advanced analytics operations."""
+
+    series_ids: List[str] = Field(
+        ...,
+        min_length=1,
+        max_length=50,
+        description="List of FRED series IDs to analyze",
+    )
+    analytics_types: List[str] = Field(
+        ...,
+        min_length=1,
+        description="Types of analytics to perform: 'forecasts', 'anomalies', 'trends', 'seasonal_decomposition', 'volatility'",
+    )
+    limit: int = Field(
+        default=100, ge=1, le=1000, description="Maximum observations per series"
+    )
+    sort_order: str = Field(
+        default="desc", pattern="^(asc|desc)$", description="Sort order"
+    )
+    use_cache: bool = Field(
+        default=True, description="Whether to use cached data if available"
+    )
+    # Forecasting options
+    forecast_horizon: Optional[int] = Field(
+        None,
+        ge=1,
+        le=120,
+        description="Number of periods to forecast (required if 'forecasts' in analytics_types)",
+    )
+    forecast_method: Optional[str] = Field(
+        None,
+        pattern="^(arima|exponential_smoothing|linear_regression)$",
+        description="Forecasting method (required if 'forecasts' in analytics_types)",
+    )
+    # Anomaly detection options
+    anomaly_method: Optional[str] = Field(
+        None,
+        pattern="^(z_score|iqr|moving_average)$",
+        description="Anomaly detection method (required if 'anomalies' in analytics_types)",
+    )
+    anomaly_threshold: Optional[float] = Field(
+        None,
+        ge=1.0,
+        le=10.0,
+        description="Z-score threshold for anomaly detection (default: 3.0)",
+    )
+    # Trend analysis options
+    trend_type: Optional[str] = Field(
+        None,
+        pattern="^(linear|polynomial)$",
+        description="Type of trend analysis (required if 'trends' in analytics_types)",
+    )
+    polynomial_degree: Optional[int] = Field(
+        None,
+        ge=2,
+        le=5,
+        description="Polynomial degree for polynomial trends (default: 2)",
+    )
+    # Seasonal decomposition options
+    decomposition_type: Optional[str] = Field(
+        None,
+        pattern="^(additive|multiplicative)$",
+        description="Decomposition type (required if 'seasonal_decomposition' in analytics_types)",
+    )
+    seasonal_period: Optional[int] = Field(
+        None,
+        ge=2,
+        le=365,
+        description="Seasonal period (e.g., 12 for monthly data, required if 'seasonal_decomposition' in analytics_types)",
+    )
+    # Volatility options
+    volatility_window: Optional[int] = Field(
+        None,
+        ge=2,
+        le=365,
+        description="Rolling window size for volatility calculation (default: 30)",
+    )
+
+    @field_validator("series_ids")
+    @classmethod
+    def validate_series_ids(cls, v: List[str]) -> List[str]:
+        """Validate and normalize series IDs."""
+        validated = []
+        for series_id in v:
+            if not series_id.strip():
+                raise ValueError("Series ID cannot be empty")
+            if not series_id.replace("_", "").replace("-", "").isalnum():
+                raise ValueError(f"Series ID '{series_id}' contains invalid characters")
+            validated.append(series_id.strip().upper())
+        return validated
+
+    @field_validator("analytics_types")
+    @classmethod
+    def validate_analytics_types(cls, v: List[str]) -> List[str]:
+        """Validate analytics types."""
+        valid_types = [
+            "forecasts",
+            "anomalies",
+            "trends",
+            "seasonal_decomposition",
+            "volatility",
+        ]
+        for analytics_type in v:
+            if analytics_type not in valid_types:
+                raise ValueError(
+                    f"Invalid analytics type: {analytics_type}. Must be one of {valid_types}"
+                )
+        return v
+
+
+class AdvancedAnalyticsResponse(BaseModel):
+    """Response model for advanced analytics operations."""
+
+    series_count: int = Field(..., description="Number of series analyzed")
+    forecasts: Optional[List[Forecast]] = Field(None, description="Forecasted values")
+    anomalies: Optional[List[Anomaly]] = Field(None, description="Detected anomalies")
+    trends: Optional[List[Trend]] = Field(None, description="Trend analysis results")
+    seasonal_decompositions: Optional[List[SeasonalDecomposition]] = Field(
+        None, description="Seasonal decomposition results"
+    )
+    volatility: Optional[List[Volatility]] = Field(
+        None, description="Volatility analysis results"
+    )

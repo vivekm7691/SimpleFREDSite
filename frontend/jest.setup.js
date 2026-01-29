@@ -29,7 +29,9 @@ beforeAll(() => {
     if (
       args.length > 0 &&
       typeof args[0] === 'string' &&
-      args[0].includes('Error loading categories:')
+      (args[0].includes('Error loading categories:') ||
+        args[0].includes('Advanced analytics error:') ||
+        args[0].includes('Analytics error:'))
     ) {
       return
     }

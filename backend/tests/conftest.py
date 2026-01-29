@@ -198,6 +198,22 @@ def mock_spark_data_service(monkeypatch):
         def calculate_time_aggregations(self, *args, **kwargs):
             return self._mock_service.calculate_time_aggregations(*args, **kwargs)
 
+        # Advanced analytics methods (Increment 6)
+        def detect_anomalies(self, *args, **kwargs):
+            return self._mock_service.detect_anomalies(*args, **kwargs)
+
+        def calculate_volatility(self, *args, **kwargs):
+            return self._mock_service.calculate_volatility(*args, **kwargs)
+
+        def analyze_trends(self, *args, **kwargs):
+            return self._mock_service.analyze_trends(*args, **kwargs)
+
+        def decompose_seasonal(self, *args, **kwargs):
+            return self._mock_service.decompose_seasonal(*args, **kwargs)
+
+        def calculate_forecasts(self, *args, **kwargs):
+            return self._mock_service.calculate_forecasts(*args, **kwargs)
+
         def __getattr__(self, name):
             # Fallback to mock_service for any other attributes/methods
             return getattr(self._mock_service, name)

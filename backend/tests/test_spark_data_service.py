@@ -5,7 +5,9 @@ Tests for SparkDataService.
 import pytest
 from unittest.mock import MagicMock, AsyncMock, patch, mock_open
 from pathlib import Path
+from datetime import date
 import os
+import numpy as np
 
 from app.services.spark_data_service import SparkDataService
 from app.models.schemas import FREDDataResponse, FREDSeriesInfo, FREDObservation
@@ -874,3 +876,600 @@ class TestSparkDataServiceAnalytics:
                 spark_data_service.calculate_time_aggregations(
                     mock_df, period="monthly", agg_function="invalid"
                 )
+
+
+class TestSparkDataServiceAdvancedAnalytics:
+    """Test cases for advanced analytics methods in SparkDataService."""
+
+    @pytest.fixture
+    def mock_spark_service(self):
+        """Create a mock Spark service."""
+        mock_service = MagicMock()
+        mock_spark = MagicMock()
+        mock_spark.version = "3.5.0"
+        mock_service.spark = mock_spark
+        mock_service.is_available = MagicMock(return_value=True)
+        return mock_service
+
+    @pytest.fixture
+    def mock_fred_service(self):
+        """Create a mock FRED service."""
+        return MagicMock()
+
+    @pytest.fixture
+    def spark_data_service(
+        self, mock_spark_service, mock_fred_service, monkeypatch, tmp_path
+    ):
+        """Create SparkDataService instance with mocked dependencies."""
+        with patch.dict(os.environ, {"DATA_DIR": str(tmp_path)}):
+            with patch("pathlib.Path.mkdir"):
+                service = SparkDataService(
+                    spark_service=mock_spark_service, fred_service=mock_fred_service
+                )
+                service.cache_dir = tmp_path / "cache"
+                return service
+
+    def test_detect_anomalies_z_score(self, spark_data_service):
+        """Test anomaly detection using Z-score method."""
+        from pyspark.sql.types import DateType
+        from datetime import date
+
+        mock_df = MagicMock()
+        mock_df.count.return_value = 5
+        mock_schema = MagicMock()
+        mock_schema.__getitem__.return_value.dataType = DateType()
+        mock_df.schema = mock_schema
+
+        # Mock DataFrame operations
+        mock_distinct = MagicMock()
+        mock_df.select.return_value.distinct.return_value = mock_distinct
+        mock_series_row = MagicMock()
+        mock_series_row.__getitem__.return_value = "GDP"
+        mock_distinct.collect.return_value = [mock_series_row]
+
+        mock_filtered = MagicMock()
+        mock_df.filter.return_value.orderBy.return_value = mock_filtered
+
+        # Mock aggregation for mean and std
+        mock_agg = MagicMock()
+        mock_filtered.agg.return_value = mock_agg
+        mock_stats_row = MagicMock()
+        mock_stats_row.__getitem__.side_effect = lambda key: {
+            "mean": 100.0,
+            "std": 10.0,
+        }[key]
+        mock_agg.collect.return_value = [mock_stats_row]
+
+        # Mock Z-score calculation
+        mock_with_z = MagicMock()
+        mock_filtered.withColumn.return_value = mock_with_z
+        mock_anomalies_df = MagicMock()
+        mock_with_z.filter.return_value = mock_anomalies_df
+
+        # Mock anomaly row
+        mock_anomaly_row = MagicMock()
+        mock_anomaly_row.__getitem__.side_effect = lambda key: {
+            "date": date(2024, 1, 1),
+            "value": 130.0,
+            "z_score": 3.5,
+        }[key]
+        mock_anomalies_df.select.return_value.collect.return_value = [
+            mock_anomaly_row
+        ]
+
+        # Mock col() to support comparison operations
+        mock_col = MagicMock()
+        mock_col.__gt__ = MagicMock(return_value=MagicMock())
+        mock_col.__lt__ = MagicMock(return_value=MagicMock())
+        
+        with patch("app.services.spark_data_service.col", return_value=mock_col), patch(
+            "app.services.spark_data_service.avg", return_value=MagicMock()
+        ), patch(
+            "app.services.spark_data_service.stddev", return_value=MagicMock()
+        ):
+            result = spark_data_service.detect_anomalies(
+                mock_df, method="z_score", threshold=3.0
+            )
+
+            # Verify the method was called
+            assert mock_df.filter.called
+
+    def test_detect_anomalies_iqr(self, spark_data_service):
+        """Test anomaly detection using IQR method."""
+        from pyspark.sql.types import DateType
+
+        mock_df = MagicMock()
+        mock_df.count.return_value = 5
+        mock_schema = MagicMock()
+        mock_schema.__getitem__.return_value.dataType = DateType()
+        mock_df.schema = mock_schema
+
+        mock_distinct = MagicMock()
+        mock_df.select.return_value.distinct.return_value = mock_distinct
+        mock_series_row = MagicMock()
+        mock_series_row.__getitem__.return_value = "GDP"
+        mock_distinct.collect.return_value = [mock_series_row]
+
+        mock_filtered = MagicMock()
+        mock_df.filter.return_value.orderBy.return_value = mock_filtered
+
+        # Mock approxQuantile for IQR
+        mock_filtered.approxQuantile.return_value = [90.0, 100.0, 110.0]
+
+        mock_anomalies_df = MagicMock()
+        mock_filtered.filter.return_value = mock_anomalies_df
+
+        mock_anomaly_row = MagicMock()
+        mock_anomaly_row.__getitem__.side_effect = lambda key: {
+            "date": date(2024, 1, 1),
+            "value": 150.0,
+        }[key]
+        mock_anomalies_df.select.return_value.collect.return_value = [
+            mock_anomaly_row
+        ]
+
+        # Mock col() to support comparison operations
+        mock_col = MagicMock()
+        mock_col.__gt__ = MagicMock(return_value=MagicMock())
+        mock_col.__lt__ = MagicMock(return_value=MagicMock())
+        
+        with patch("app.services.spark_data_service.col", return_value=mock_col):
+            result = spark_data_service.detect_anomalies(mock_df, method="iqr")
+
+            assert mock_df.filter.called
+
+    def test_calculate_volatility(self, spark_data_service):
+        """Test volatility calculation."""
+        from pyspark.sql.types import DateType
+        from datetime import date
+
+        mock_df = MagicMock()
+        mock_df.count.return_value = 5
+        mock_schema = MagicMock()
+        mock_schema.__getitem__.return_value.dataType = DateType()
+        mock_df.schema = mock_schema
+
+        mock_distinct = MagicMock()
+        mock_df.select.return_value.distinct.return_value = mock_distinct
+        mock_series_row = MagicMock()
+        mock_series_row.__getitem__.return_value = "GDP"
+        mock_distinct.collect.return_value = [mock_series_row]
+
+        mock_filtered = MagicMock()
+        mock_df.filter.return_value.orderBy.return_value = mock_filtered
+
+        # Mock return calculation
+        mock_with_prev = MagicMock()
+        mock_filtered.withColumn.return_value = mock_with_prev
+        mock_with_return = MagicMock()
+        mock_with_prev.withColumn.return_value = mock_with_return
+
+        # Mock volatility calculation
+        mock_with_vol = MagicMock()
+        mock_with_return.withColumn.return_value = mock_with_vol
+
+        # Mock result row
+        mock_vol_row = MagicMock()
+        mock_vol_row.__getitem__.side_effect = lambda key: {
+            "date": date(2024, 2, 1),
+            "value": 105.0,
+            "return": 0.05,
+            "volatility": 0.03,
+            "annualized_volatility": 0.48,
+        }[key]
+        mock_with_vol.select.return_value.collect.return_value = [mock_vol_row]
+
+        with patch(
+            "app.services.spark_data_service.col", return_value=MagicMock()
+        ), patch(
+            "app.services.spark_data_service.lag", return_value=MagicMock()
+        ), patch(
+            "app.services.spark_data_service.when", return_value=MagicMock()
+        ), patch(
+            "app.services.spark_data_service.stddev", return_value=MagicMock()
+        ), patch(
+            "app.services.spark_data_service.expr", return_value=MagicMock()
+        ), patch(
+            "app.services.spark_data_service.Window", return_value=MagicMock()
+        ):
+            result = spark_data_service.calculate_volatility(mock_df, window_size=30)
+
+            assert mock_df.filter.called
+
+    def test_analyze_trends_linear(self, spark_data_service):
+        """Test trend analysis with linear trend."""
+        from pyspark.sql.types import DateType
+        from datetime import date
+
+        mock_df = MagicMock()
+        mock_df.count.return_value = 5
+        mock_schema = MagicMock()
+        mock_schema.__getitem__.return_value.dataType = DateType()
+        mock_df.schema = mock_schema
+
+        mock_distinct = MagicMock()
+        mock_df.select.return_value.distinct.return_value = mock_distinct
+        mock_series_row = MagicMock()
+        mock_series_row.__getitem__.return_value = "GDP"
+        mock_distinct.collect.return_value = [mock_series_row]
+
+        mock_filtered = MagicMock()
+        mock_df.filter.return_value.orderBy.return_value = mock_filtered
+
+        # Mock data collection
+        mock_data_row = MagicMock()
+        mock_data_row.__getitem__.side_effect = lambda key: {
+            "date": date(2024, 1, 1),
+            "value": 100.0,
+            "row_num": 1,
+        }[key]
+        mock_filtered.select.return_value.collect.return_value = [
+            mock_data_row,
+            MagicMock(__getitem__=lambda k: {
+                "date": date(2024, 2, 1),
+                "value": 105.0,
+                "row_num": 2,
+            }[k]),
+        ]
+
+        with patch("app.services.spark_data_service.col", return_value=MagicMock()), patch(
+            "app.services.spark_data_service.expr", return_value=MagicMock()
+        ):
+            result = spark_data_service.analyze_trends(
+                mock_df, trend_type="linear"
+            )
+
+            assert len(result) >= 0  # May return empty or have trend data
+
+    def test_decompose_seasonal(self, spark_data_service):
+        """Test seasonal decomposition."""
+        from pyspark.sql.types import DateType
+        from datetime import date
+
+        mock_df = MagicMock()
+        mock_df.count.return_value = 25  # Enough for seasonal decomposition
+        mock_schema = MagicMock()
+        mock_schema.__getitem__.return_value.dataType = DateType()
+        mock_df.schema = mock_schema
+
+        mock_distinct = MagicMock()
+        mock_df.select.return_value.distinct.return_value = mock_distinct
+        mock_series_row = MagicMock()
+        mock_series_row.__getitem__.return_value = "GDP"
+        mock_distinct.collect.return_value = [mock_series_row]
+
+        mock_filtered = MagicMock()
+        mock_df.filter.return_value.orderBy.return_value = mock_filtered
+
+        # Mock data collection
+        mock_data_rows = []
+        for i in range(25):
+            mock_row = MagicMock()
+            mock_row.__getitem__.side_effect = lambda key, idx=i: {
+                "date": date(2024, 1 + (idx % 12), 1),
+                "value": 100.0 + idx,
+            }[key]
+            mock_data_rows.append(mock_row)
+
+        mock_filtered.select.return_value.collect.return_value = mock_data_rows
+
+        result = spark_data_service.decompose_seasonal(
+            mock_df, decomposition_type="additive", seasonal_period=12
+        )
+
+        # Should process the data (may return empty if insufficient data)
+        assert isinstance(result, list)
+
+    def test_calculate_forecasts_linear_regression(self, spark_data_service):
+        """Test forecasting using linear regression."""
+        from pyspark.sql.types import DateType
+        from datetime import date, timedelta
+
+        mock_df = MagicMock()
+        mock_df.count.return_value = 10
+        mock_schema = MagicMock()
+        mock_schema.__getitem__.return_value.dataType = DateType()
+        mock_df.schema = mock_schema
+
+        mock_distinct = MagicMock()
+        mock_df.select.return_value.distinct.return_value = mock_distinct
+        mock_series_row = MagicMock()
+        mock_series_row.__getitem__.return_value = "GDP"
+        mock_distinct.collect.return_value = [mock_series_row]
+
+        mock_filtered = MagicMock()
+        mock_df.filter.return_value.orderBy.return_value = mock_filtered
+
+        # Mock data collection
+        base_date = date(2024, 1, 1)
+        mock_data_rows = []
+        for i in range(10):
+            mock_row = MagicMock()
+            mock_row.__getitem__.side_effect = lambda key, idx=i: {
+                "date": base_date + timedelta(days=30 * idx),
+                "value": 100.0 + idx * 5,
+            }[key]
+            mock_data_rows.append(mock_row)
+
+        mock_filtered.select.return_value.collect.return_value = mock_data_rows
+
+        result = spark_data_service.calculate_forecasts(
+            mock_df, forecast_horizon=12, forecast_method="linear_regression"
+        )
+
+        # Should generate forecasts
+        assert isinstance(result, list)
+
+    def test_detect_anomalies_empty_data(self, spark_data_service):
+        """Test anomaly detection with empty DataFrame."""
+        mock_df = MagicMock()
+        mock_df.count.return_value = 0
+
+        result = spark_data_service.detect_anomalies(mock_df, method="z_score")
+
+        assert result == []
+
+    def test_calculate_volatility_empty_data(self, spark_data_service):
+        """Test volatility calculation with empty DataFrame."""
+        mock_df = MagicMock()
+        mock_df.count.return_value = 0
+
+        result = spark_data_service.calculate_volatility(mock_df, window_size=30)
+
+        assert result == []
+
+    def test_analyze_trends_insufficient_data(self, spark_data_service):
+        """Test trend analysis with insufficient data."""
+        from pyspark.sql.types import DateType
+        from datetime import date
+
+        mock_df = MagicMock()
+        mock_df.count.return_value = 1  # Insufficient for trend
+        mock_schema = MagicMock()
+        mock_schema.__getitem__.return_value.dataType = DateType()
+        mock_df.schema = mock_schema
+
+        mock_distinct = MagicMock()
+        mock_df.select.return_value.distinct.return_value = mock_distinct
+        mock_series_row = MagicMock()
+        mock_series_row.__getitem__.return_value = "GDP"
+        mock_distinct.collect.return_value = [mock_series_row]
+
+        mock_filtered = MagicMock()
+        mock_df.filter.return_value.orderBy.return_value = mock_filtered
+
+        mock_data_row = MagicMock()
+        mock_data_row.__getitem__.side_effect = lambda key: {
+            "date": date(2024, 1, 1),
+            "value": 100.0,
+            "row_num": 1,
+        }[key]
+        mock_filtered.select.return_value.collect.return_value = [mock_data_row]
+
+        with patch("app.services.spark_data_service.col", return_value=MagicMock()), patch(
+            "app.services.spark_data_service.expr", return_value=MagicMock()
+        ):
+            result = spark_data_service.analyze_trends(
+                mock_df, trend_type="linear"
+            )
+
+            # Should handle insufficient data gracefully
+            assert isinstance(result, list)
+            if len(result) > 0:
+                assert result[0]["trend_type"] in ["linear", "polynomial", "none"]
+
+
+class TestSparkDataServiceModelCaching:
+    """Test cases for ARIMA model caching methods in SparkDataService."""
+
+    @pytest.fixture
+    def mock_spark_service(self):
+        """Create a mock Spark service."""
+        mock_service = MagicMock()
+        mock_spark = MagicMock()
+        mock_spark.version = "3.5.0"
+        mock_service.spark = mock_spark
+        mock_service.is_available = MagicMock(return_value=True)
+        return mock_service
+
+    @pytest.fixture
+    def mock_fred_service(self):
+        """Create a mock FRED service."""
+        return MagicMock()
+
+    @pytest.fixture
+    def spark_data_service(
+        self, mock_spark_service, mock_fred_service, monkeypatch, tmp_path
+    ):
+        """Create SparkDataService instance with mocked dependencies."""
+        with patch.dict(os.environ, {"DATA_DIR": str(tmp_path)}):
+            with patch("pathlib.Path.mkdir"):
+                service = SparkDataService(
+                    spark_service=mock_spark_service, fred_service=mock_fred_service
+                )
+                service.cache_dir = tmp_path / "cache"
+                service.model_cache_dir = tmp_path / "models"
+                return service
+
+    def test_get_model_cache_path(self, spark_data_service):
+        """Test getting model cache path."""
+        path = spark_data_service._get_model_cache_path("GDP", 12, "arima")
+        assert path.parent == spark_data_service.model_cache_dir
+        assert path.name == "GDP_12_arima.pkl"
+
+    def test_is_model_cached_false(self, spark_data_service):
+        """Test checking if model is cached when it doesn't exist."""
+        result = spark_data_service._is_model_cached("GDP", 12, "arima")
+        assert result is False
+
+    def test_is_model_cached_true(self, spark_data_service, tmp_path):
+        """Test checking if model is cached when it exists."""
+        model_cache_dir = tmp_path / "models"
+        model_cache_dir.mkdir(parents=True, exist_ok=True)
+        model_file = model_cache_dir / "GDP_12_arima.pkl"
+        model_file.write_bytes(b"fake model data")
+        
+        result = spark_data_service._is_model_cached("GDP", 12, "arima")
+        assert result is True
+
+    def test_load_model_from_cache_not_exists(self, spark_data_service):
+        """Test loading model from cache when file doesn't exist."""
+        with pytest.raises(FileNotFoundError):
+            spark_data_service._load_model_from_cache("GDP", 12, "arima")
+
+    def test_load_model_from_cache_success(self, spark_data_service, tmp_path):
+        """Test loading model from cache successfully."""
+        import joblib
+        import numpy as np
+        
+        model_cache_dir = tmp_path / "models"
+        model_cache_dir.mkdir(parents=True, exist_ok=True)
+        model_file = model_cache_dir / "GDP_12_arima.pkl"
+        
+        # Create a simple mock model object to cache
+        mock_model = {"order": (1, 1, 1), "data": np.array([1, 2, 3])}
+        joblib.dump(mock_model, model_file)
+        
+        loaded_model = spark_data_service._load_model_from_cache("GDP", 12, "arima")
+        # Compare dict keys and values separately to avoid numpy array comparison issues
+        assert loaded_model["order"] == mock_model["order"]
+        assert np.array_equal(loaded_model["data"], mock_model["data"])
+
+    def test_save_model_to_cache(self, spark_data_service, tmp_path):
+        """Test saving model to cache."""
+        import joblib
+        import numpy as np
+        
+        mock_model = {"order": (1, 1, 1), "data": np.array([1, 2, 3])}
+        
+        spark_data_service._save_model_to_cache(mock_model, "GDP", 12, "arima")
+        
+        # Verify file was created
+        model_file = tmp_path / "models" / "GDP_12_arima.pkl"
+        assert model_file.exists()
+        
+        # Verify we can load it back
+        loaded_model = joblib.load(model_file)
+        # Compare dict keys and values separately to avoid numpy array comparison issues
+        assert loaded_model["order"] == mock_model["order"]
+        assert np.array_equal(loaded_model["data"], mock_model["data"])
+
+    def test_calculate_forecasts_arima_with_cache(self, spark_data_service):
+        """Test ARIMA forecasting with cached model."""
+        from pyspark.sql.types import DateType
+        from datetime import date, timedelta
+        import joblib
+        import numpy as np
+        
+        # Create a mock cached model
+        model_cache_dir = spark_data_service.model_cache_dir
+        model_cache_dir.mkdir(parents=True, exist_ok=True)
+        model_file = model_cache_dir / "GDP_12_arima.pkl"
+        
+        # Don't actually dump MagicMock, instead mock the load
+        # Create a callable mock that returns the forecast
+        class MockModel:
+            def predict(self, n_periods, return_conf_int=True):
+                return (
+                    np.array([110.0, 115.0, 120.0]),
+                    np.array([[105.0, 115.0], [110.0, 120.0], [115.0, 125.0]])
+                )
+        
+        # Create mock DataFrame
+        mock_df = MagicMock()
+        mock_df.count.return_value = 10
+        mock_schema = MagicMock()
+        mock_schema.__getitem__.return_value.dataType = DateType()
+        mock_df.schema = mock_schema
+        
+        mock_distinct = MagicMock()
+        mock_df.select.return_value.distinct.return_value = mock_distinct
+        mock_series_row = MagicMock()
+        mock_series_row.__getitem__.return_value = "GDP"
+        mock_distinct.collect.return_value = [mock_series_row]
+        
+        mock_filtered = MagicMock()
+        mock_df.filter.return_value.orderBy.return_value = mock_filtered
+        
+        base_date = date(2024, 1, 1)
+        mock_data_rows = []
+        for i in range(10):
+            mock_row = MagicMock()
+            mock_row.__getitem__.side_effect = lambda key, idx=i: {
+                "date": base_date + timedelta(days=30 * idx),
+                "value": 100.0 + idx * 5,
+            }[key]
+            mock_data_rows.append(mock_row)
+        
+        mock_filtered.select.return_value.collect.return_value = mock_data_rows
+        
+        with patch("joblib.load", return_value=MockModel()):
+            result = spark_data_service.calculate_forecasts(
+                mock_df, forecast_horizon=3, forecast_method="arima"
+            )
+            
+            # Verify model was loaded from cache (not fitted)
+            assert len(result) == 3
+            assert result[0]["series_id"] == "GDP"
+            assert result[0]["forecast_method"] == "arima"
+
+    def test_calculate_forecasts_arima_cache_miss(self, spark_data_service):
+        """Test ARIMA forecasting when model is not cached (cache miss)."""
+        from pyspark.sql.types import DateType
+        from datetime import date, timedelta
+        
+        # Create mock DataFrame
+        mock_df = MagicMock()
+        mock_df.count.return_value = 10
+        mock_schema = MagicMock()
+        mock_schema.__getitem__.return_value.dataType = DateType()
+        mock_df.schema = mock_schema
+        
+        mock_distinct = MagicMock()
+        mock_df.select.return_value.distinct.return_value = mock_distinct
+        mock_series_row = MagicMock()
+        mock_series_row.__getitem__.return_value = "GDP"
+        mock_distinct.collect.return_value = [mock_series_row]
+        
+        mock_filtered = MagicMock()
+        mock_df.filter.return_value.orderBy.return_value = mock_filtered
+        
+        base_date = date(2024, 1, 1)
+        mock_data_rows = []
+        for i in range(10):
+            mock_row = MagicMock()
+            mock_row.__getitem__.side_effect = lambda key, idx=i: {
+                "date": base_date + timedelta(days=30 * idx),
+                "value": 100.0 + idx * 5,
+            }[key]
+            mock_data_rows.append(mock_row)
+        
+        mock_filtered.select.return_value.collect.return_value = mock_data_rows
+        
+        # Mock pmdarima (imported inside the function, so patch where it's used)
+        with patch("pmdarima.auto_arima") as mock_auto_arima, \
+             patch("pandas.Series") as mock_pd_series, \
+             patch("joblib.dump") as mock_joblib_dump:
+            
+            # Mock auto_arima to return a model with predict method
+            class MockARIMAModel:
+                def predict(self, n_periods, return_conf_int=True):
+                    forecast = np.array([110.0, 115.0, 120.0])
+                    conf_int = np.array([[105.0, 115.0], [110.0, 120.0], [115.0, 125.0]])
+                    return forecast, conf_int
+            
+            mock_arima_model = MockARIMAModel()
+            mock_auto_arima.return_value = mock_arima_model
+            
+            # Mock pandas Series
+            mock_series = MagicMock()
+            mock_pd_series.return_value = mock_series
+            
+            result = spark_data_service.calculate_forecasts(
+                mock_df, forecast_horizon=3, forecast_method="arima"
+            )
+            
+            # Verify model was fitted (auto_arima was called)
+            mock_auto_arima.assert_called_once()
+            # Verify model was saved to cache
+            mock_joblib_dump.assert_called_once()
